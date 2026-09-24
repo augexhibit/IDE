@@ -1,0 +1,1754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mini IDE</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#eef0f2;
+    --blue:#a9cdf0;
+    --blue-2:#8fbde8;
+    --ink:#1b1b1b;
+    --line:#d5dae0;
+    --white:#fff;
+    --danger:#d64545;
+  }
+  html,body{height:100%}
+  body{
+    font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    background:var(--bg); color:var(--ink);
+    display:flex; flex-direction:column;
+    height:100dvh; overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  /* ───────── top bar ───────── */
+  .topbar{display:flex;align-items:center;gap:8px;padding:12px 12px 6px;flex:none}
+  .icon-btn{
+    width:46px;height:46px;flex:none;border:none;background:#fff;border-radius:14px;
+    box-shadow:0 1px 4px rgba(0,0,0,.13);display:grid;place-items:center;
+    font-size:19px;line-height:1;cursor:pointer;color:var(--ink);
+    transition:transform .12s,box-shadow .12s;
+  }
+  .icon-btn:active{transform:scale(.95)}
+  .icon-btn:disabled{opacity:.35}
+  .icon-btn.sm{width:38px;height:38px;border-radius:11px;font-size:16px}
+  .actions-group{
+    display:flex;gap:2px;background:#fff;border-radius:14px;padding:4px;
+    box-shadow:0 1px 4px rgba(0,0,0,.13);flex:none;
+  }
+  .actions-group .icon-btn{box-shadow:none;border-radius:11px;width:40px;height:40px}
+
+  .file-strip{
+    flex:1;min-width:0;display:flex;align-items:center;gap:7px;
+    overflow-x:auto;overflow-y:hidden;
+    background:#dfe8f2;border-radius:999px;padding:6px 12px;height:46px;
+    scrollbar-width:none;
+  }
+  .file-strip::-webkit-scrollbar{display:none}
+  .file-strip .empty{font-size:12px;color:#667;font-weight:600;padding:0 6px}
+  .chip{
+    flex:none;display:inline-flex;align-items:center;gap:6px;
+    border:none;background:#fff;border-radius:999px;
+    padding:7px 13px;font-size:12px;font-weight:600;color:#1b1b1b;
+    cursor:pointer;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.08);
+    transition:background .15s,color .15s;
+  }
+  .chip.active{background:#2f6fb0;color:#fff}
+  .chip .dir{opacity:.5;font-weight:500;font-size:11px}
+  .chip.active .dir{opacity:.75}
+
+  /* ───────── tool row ───────── */
+  .toolrow{
+    display:flex;align-items:center;justify-content:center;gap:18px;
+    padding:4px 12px 12px;flex:none;
+  }
+  .diamond{
+    width:58px;height:58px;flex:none;border:none;cursor:pointer;
+    background:var(--blue);border-radius:9px;transform:rotate(45deg);
+    box-shadow:0 2px 6px rgba(0,0,0,.16);
+    display:grid;place-items:center;transition:transform .12s;
+  }
+  .diamond:active{transform:rotate(45deg) scale(.94)}
+  .diamond span{transform:rotate(-45deg);font-size:12px;font-weight:800;letter-spacing:.3px}
+
+  .toggle{
+    display:inline-flex;background:#cfe0f2;border:2px solid #5b9bd5;
+    border-radius:999px;padding:3px;gap:2px;
+  }
+  .toggle button{
+    border:none;background:transparent;padding:9px 30px;font-size:12.5px;
+    font-weight:700;letter-spacing:.6px;color:#1a1a1a;border-radius:999px;
+    cursor:pointer;transition:background .15s;text-transform:uppercase;
+  }
+  .toggle button.active{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+
+  /* ───────── split ───────── */
+  .split{
+    flex:1;display:grid;grid-template-columns:78px 1fr;gap:10px;
+    padding:0 12px 12px;min-height:0;
+  }
+  .rail{
+    background:var(--blue);border-radius:14px;display:flex;flex-direction:column;
+    align-items:center;gap:10px;padding:12px 8px;overflow-y:auto;
+    scrollbar-width:none;
+  }
+  .rail::-webkit-scrollbar{display:none}
+  .railbtn{
+    flex:none;width:58px;height:58px;border-radius:50%;
+    border:1.6px solid #303030;background:transparent;color:#111;
+    font-size:10.5px;font-weight:700;line-height:1.15;cursor:pointer;
+    display:grid;place-items:center;text-align:center;padding:4px;
+    transition:background .15s,transform .12s;
+  }
+  .railbtn:hover{background:rgba(255,255,255,.45)}
+  .railbtn:active{transform:scale(.94)}
+  .railbtn.rect{border-radius:10px;height:52px}
+
+  .pane{
+    background:var(--blue);border-radius:14px;display:flex;flex-direction:column;
+    overflow:hidden;position:relative;min-height:0;
+  }
+  textarea#code{
+    flex:1;width:100%;border:none;outline:none;resize:none;padding:14px;
+    font-family:'Consolas','Monaco','SF Mono',monospace;font-size:13px;
+    line-height:1.55;background:#fff;color:#161616;tab-size:2;
+    display:none;white-space:pre;overflow:auto;
+  }
+  textarea#code::placeholder{color:#9aa}
+  iframe#preview{
+    flex:1;width:100%;border:none;background:#fff;display:none;
+  }
+  .pane .placeholder{
+    flex:1;display:grid;place-items:center;font-size:14px;font-weight:600;
+    text-align:center;padding:16px;
+  }
+  body.mode-code textarea#code{display:block}
+  body.mode-code iframe#preview{display:none}
+  body.mode-preview textarea#code{display:none}
+  body.mode-preview iframe#preview{display:block}
+  body.mode-code #rightPlaceholder,
+  body.mode-preview #rightPlaceholder{display:none}
+  body.empty #rightPlaceholder{display:grid !important}
+  body.empty textarea#code,
+  body.empty iframe#preview{display:none !important}
+
+  /* ───────── FAB ───────── */
+  .fab{
+    position:fixed;right:20px;bottom:26px;width:62px;height:62px;border-radius:50%;
+    border:none;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.2);
+    font-size:30px;line-height:1;color:#222;cursor:pointer;display:grid;
+    place-items:center;z-index:40;transition:transform .12s;
+  }
+  .fab:active{transform:scale(.93)}
+
+  /* ───────── modal ───────── */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(20,28,38,.45);z-index:100;
+    display:flex;align-items:center;justify-content:center;padding:16px;
+    animation:fade .14s ease;
+  }
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{
+    background:#fff;border-radius:18px;padding:20px;width:100%;max-width:420px;
+    max-height:88dvh;display:flex;flex-direction:column;gap:14px;
+    box-shadow:0 18px 50px rgba(0,0,0,.3);animation:pop .16s ease;
+  }
+  @keyframes pop{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+  .modal.wide{max-width:640px;height:88dvh}
+  .modal h3{font-size:16px;font-weight:800}
+  .modal .hint{font-size:12.5px;color:#667;line-height:1.45}
+  .fld{display:flex;flex-direction:column;gap:6px}
+  .fld > span{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#5a6675}
+  .fld input{
+    width:100%;border:1.6px solid var(--line);border-radius:11px;padding:11px 13px;
+    font-size:14px;font-family:inherit;outline:none;background:#fafbfc;
+  }
+  .fld input:focus{border-color:#5b9bd5;background:#fff}
+  .paths{display:flex;flex-wrap:wrap;gap:6px;max-height:132px;overflow:auto;
+         background:#f4f7fa;border-radius:11px;padding:9px}
+  .pathchip{
+    border:1.4px solid #c6d4e2;background:#fff;border-radius:999px;
+    padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer;color:#2b3a4a;
+  }
+  .pathchip.active{background:#2f6fb0;color:#fff;border-color:#2f6fb0}
+  .seg{display:inline-flex;background:#e6eef7;border-radius:999px;padding:3px;gap:2px}
+  .seg button{
+    border:none;background:transparent;padding:8px 22px;border-radius:999px;
+    font-size:12.5px;font-weight:700;cursor:pointer;color:#31465c;
+  }
+  .seg button.active{background:#fff;color:#123;box-shadow:0 1px 3px rgba(0,0,0,.14)}
+
+  .actions{display:flex;gap:9px;justify-content:flex-end;margin-top:2px}
+  .btn{
+    border:none;border-radius:11px;padding:11px 17px;font-size:13px;font-weight:700;
+    cursor:pointer;background:#eef1f4;color:#233;transition:filter .15s;
+  }
+  .btn:hover{filter:brightness(.96)}
+  .btn.primary{background:#2f6fb0;color:#fff}
+  .btn.danger{background:#fbe9e9;color:var(--danger)}
+  .btn.ghost{background:transparent;border:1.5px solid var(--line)}
+  .btn.tiny{padding:7px 11px;font-size:11.5px;border-radius:9px}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  /* ───────── upload queue ───────── */
+  .uplist{display:flex;flex-direction:column;gap:9px;overflow:auto}
+  .uprow{display:flex;align-items:center;gap:8px}
+  .uporig{
+    flex:none;width:34%;font-size:11.5px;color:#67737f;font-weight:600;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .uprow input{
+    flex:1;min-width:0;border:1.6px solid var(--line);border-radius:10px;
+    padding:9px 11px;font-size:13px;font-family:inherit;outline:none;
+  }
+  .uprow input:focus{border-color:#5b9bd5}
+  .uprow input:disabled{background:#f1f3f5;color:#889}
+
+  /* ───────── file manager ───────── */
+  .mhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .mhead strong{font-size:16px;font-weight:800}
+  .mtree{
+    flex:1;overflow:auto;background:#f7f9fb;border-radius:12px;padding:6px;
+    display:flex;flex-direction:column;gap:1px;min-height:120px;
+  }
+  .frow{
+    display:flex;align-items:center;gap:7px;padding:7px 8px;border-radius:9px;
+    font-size:13px;cursor:default;user-select:none;
+  }
+  .frow:hover{background:#e9eff6}
+  .frow.sel{background:#dceaf9}
+  .frow .ftog{
+    width:20px;height:20px;flex:none;border:none;background:transparent;cursor:pointer;
+    font-size:11px;color:#4a5a6a;display:grid;place-items:center;
+  }
+  .frow .fico{flex:none;font-size:14px}
+  .frow .fname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .frow .factions{display:flex;gap:2px;flex:none;opacity:0;transition:opacity .12s}
+  .frow:hover .factions{opacity:1}
+  .frow .mini{
+    border:none;background:transparent;cursor:pointer;font-size:13px;
+    padding:4px 6px;border-radius:7px;color:#3c4c5c;
+  }
+  .frow .mini:hover{background:#d5e3f2}
+  .fchk{width:16px;height:16px;flex:none;accent-color:#2f6fb0;cursor:pointer}
+  .mempty{padding:22px;text-align:center;color:#8b98a5;font-size:13px}
+  .mfoot{display:flex;flex-wrap:wrap;gap:7px}
+  .mfoot .btn{flex:1 1 auto;padding:10px 12px;font-size:12px}
+
+  /* ───────── menu ───────── */
+  .menu{
+    position:fixed;z-index:200;background:#fff;border-radius:13px;padding:6px;
+    box-shadow:0 12px 34px rgba(0,0,0,.24);display:flex;flex-direction:column;
+    gap:2px;min-width:210px;animation:pop .12s ease;
+  }
+  .mi{
+    border:none;background:transparent;text-align:left;padding:11px 13px;
+    border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;color:#1e2a36;
+    white-space:nowrap;
+  }
+  .mi:hover{background:#eef3f9}
+  .mi.danger{color:var(--danger)}
+  .mi.danger:hover{background:#fdeeee}
+
+  /* ───────── toast ───────── */
+  #toasts{
+    position:fixed;left:50%;transform:translateX(-50%);bottom:100px;z-index:300;
+    display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;
+    width:calc(100% - 40px);max-width:420px;
+  }
+  .toast{
+    background:rgba(24,32,42,.94);color:#fff;padding:11px 17px;border-radius:12px;
+    font-size:12.5px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25);
+    animation:pop .16s ease;text-align:center;line-height:1.4;
+  }
+
+  @media (max-width:640px){
+    .split{grid-template-columns:66px 1fr;padding:0 8px 8px;gap:8px}
+    .railbtn{width:50px;height:50px;font-size:9.5px}
+    .icon-btn{width:42px;height:42px;border-radius:12px}
+    .actions-group .icon-btn{width:36px;height:36px}
+    .diamond{width:52px;height:52px}
+    .toggle button{padding:8px 20px;font-size:11.5px}
+    .toolrow{gap:12px}
+    .modal{padding:16px}
+  }
+</style>
+</head>
+<body class="mode-code">
+
+  <!-- ── top bar ── -->
+  <header class="topbar">
+    <button class="icon-btn" id="btnHome" title="Home">⌂</button>
+    <div class="file-strip" id="strip"></div>
+    <div class="actions-group">
+      <button class="icon-btn" id="btnUndo" title="Undo">↶</button>
+      <button class="icon-btn" id="btnRedo" title="Redo">↷</button>
+      <button class="icon-btn" id="btnMenu" title="Menu">⋮</button>
+    </div>
+  </header>
+
+  <!-- ── save + mode toggle ── -->
+  <div class="toolrow">
+    <button class="diamond" id="btnSave" title="Save project to a folder"><span>Save</span></button>
+    <div class="toggle">
+      <button id="btnCode" class="active">Code</button>
+      <button id="btnPreview">Preview</button>
+    </div>
+  </div>
+
+  <!-- ── split ── -->
+  <main class="split">
+    <aside class="rail">
+      <button class="railbtn" id="btnNew" title="Create file or folder">files<br>+</button>
+      <button class="railbtn" id="btnOpenFolder" title="Open a folder from disk">Open<br>Folder</button>
+      <button class="railbtn" id="btnExpand" title="Expand the full file list">List<br>expand</button>
+      <button class="railbtn rect" id="btnUpload" title="Upload files">Files<br>Upload</button>
+    </aside>
+
+    <section class="pane right">
+      <textarea id="code" spellcheck="false" placeholder="Write your HTML here..."></textarea>
+      <iframe id="preview" sandbox="allow-scripts allow-modals allow-forms allow-popups"></iframe>
+      <div class="placeholder" id="rightPlaceholder">The code or the preview</div>
+    </section>
+  </main>
+
+  <button class="fab" id="btnFab" title="Add">＋</button>
+  <div id="toasts"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   MINI IDE — virtual file system + preview + export
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── tiny helpers ─────────────────────────────────────────── */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+const parentOf = p => { const i = p.lastIndexOf('/'); return i < 0 ? '' : p.slice(0, i); };
+const nameOf   = p => { const i = p.lastIndexOf('/'); return i < 0 ? p : p.slice(i + 1); };
+const joinPath = (a, b) => (a ? a + '/' + b : b);
+
+const TEXT_EXT = new Set(['html','htm','css','js','mjs','cjs','json','txt','md','xml','svg',
+  'csv','tsv','yml','yaml','ts','tsx','jsx','c','h','cpp','hpp','py','java','rb','go','rs',
+  'php','sql','sh','bash','env','toml','ini','log','gitignore','vue','svelte','map']);
+
+const MIME = { html:'text/html', htm:'text/html', css:'text/css', js:'text/javascript',
+  mjs:'text/javascript', json:'application/json', txt:'text/plain', md:'text/markdown',
+  xml:'application/xml', svg:'image/svg+xml', png:'image/png', jpg:'image/jpeg',
+  jpeg:'image/jpeg', gif:'image/gif', webp:'image/webp', ico:'image/x-icon',
+  pdf:'application/pdf', woff:'font/woff', woff2:'font/woff2', ttf:'font/ttf',
+  mp3:'audio/mpeg', mp4:'video/mp4', csv:'text/csv', yml:'text/yaml', yaml:'text/yaml' };
+
+const extOf   = n => (n.includes('.') ? n.split('.').pop().toLowerCase() : '');
+const mimeFor = n => MIME[extOf(n)] || 'application/octet-stream';
+const isTextName = n => TEXT_EXT.has(extOf(n)) || !n.includes('.');
+
+/* ═══════════ STATE ═══════════ */
+const state = {
+  files: {},            // path -> { content:string, bin:boolean }
+  folders: new Set(),   // folder paths (no trailing slash, root = '')
+  active: null,
+  mode: 'code'
+};
+
+const LS_KEY = 'miniide.project.v2';
+
+/* ── seed project ─────────────────────────────────────────── */
+const SEED = {
+'index.html': [
+'<!DOCTYPE html>',
+'<html lang="en">',
+'<head>',
+'<meta charset="UTF-8">',
+'<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+'<title>Demo Page</title>',
+'<link rel="stylesheet" href="styles.css">',
+'</head>',
+'<body>',
+'  <main class="card">',
+'    <h1>Hello from Mini IDE</h1>',
+'    <p id="msg">Edit any file, then press <b>Preview</b>.</p>',
+'    <button id="go">Click me</button>',
+'  </main>',
+'  <script src="app.js"><\/script>',
+'</body>',
+'</html>'
+].join('\n'),
+
+'styles.css': [
+':root { --brand: #2f6fb0; }',
+'* { box-sizing: border-box; }',
+'body {',
+'  margin: 0; min-height: 100vh; display: grid; place-items: center;',
+'  font-family: system-ui, -apple-system, sans-serif;',
+'  background: linear-gradient(140deg, #eaf3fc, #d5e7f8);',
+'}',
+'.card {',
+'  background: #fff; padding: 34px 38px; border-radius: 18px;',
+'  box-shadow: 0 14px 40px rgba(20, 60, 110, .18); text-align: center;',
+'}',
+'h1 { margin: 0 0 10px; font-size: 24px; color: #14304d; }',
+'p { margin: 0 0 18px; color: #56708a; }',
+'button {',
+'  border: none; background: var(--brand); color: #fff; font-weight: 700;',
+'  padding: 11px 24px; border-radius: 999px; cursor: pointer; font-size: 14px;',
+'}',
+'button:active { transform: scale(.96); }'
+].join('\n'),
+
+'app.js': [
+'var count = 0;',
+'var btn = document.getElementById("go");',
+'var msg = document.getElementById("msg");',
+'btn.addEventListener("click", function () {',
+'  count++;',
+'  msg.textContent = "Clicked " + count + " time" + (count === 1 ? "" : "s") + " 🎉";',
+'});'
+].join('\n'),
+
+'data.json': [
+'{',
+'  "name": "mini-ide",',
+'  "version": "2.0.0",',
+'  "files": ["index.html", "styles.css", "app.js"],',
+'  "notes": "This JSON file lives right next to index.html."',
+'}'
+].join('\n'),
+
+'notes.txt': [
+'Mini IDE — quick notes',
+'----------------------',
+'• The pill at the top lists every file in the project.',
+'• Save writes the whole project into a folder you pick,',
+'  and removes anything extra that lives there.',
+'• "List expand" opens the full manager: download, rename,',
+'  delete, upload and create.',
+'• Uploading 3 files or fewer lets you rename each one first.'
+].join('\n')
+};
+
+/* ═══════════ PERSISTENCE ═══════════ */
+let saveTimer = null;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persist, 350);
+}
+function persist() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      files: state.files,
+      folders: Array.from(state.folders),
+      active: state.active
+    }));
+  } catch (e) { /* quota — ignore */ }
+}
+function restore() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    if (!d || !d.files || !Object.keys(d.files).length) return false;
+    state.files = d.files;
+    state.folders = new Set(d.folders || []);
+    state.active = (d.active && state.files[d.active]) ? d.active : Object.keys(state.files)[0];
+    return true;
+  } catch (e) { return false; }
+}
+
+/* ═══════════ HISTORY (undo / redo) ═══════════ */
+let history = [], hIndex = -1, hTimer = null;
+
+function snap() {
+  return JSON.stringify({
+    files: state.files,
+    folders: Array.from(state.folders),
+    active: state.active
+  });
+}
+function seedHistory() {
+  history = [snap()];
+  hIndex = 0;
+  updateUndoRedo();
+}
+function commitHistory() {
+  clearTimeout(hTimer);
+  hTimer = setTimeout(() => {
+    const s = snap();
+    if (history[hIndex] === s) return;
+    history = history.slice(0, hIndex + 1);
+    history.push(s);
+    if (history.length > 60) history.shift();
+    hIndex = history.length - 1;
+    updateUndoRedo();
+  }, 420);
+}
+function applySnapshot(s) {
+  const d = JSON.parse(s);
+  state.files = d.files;
+  state.folders = new Set(d.folders);
+  state.active = d.active;
+  renderAll();
+  persist();
+}
+function undo() {
+  if (hIndex <= 0) return;
+  hIndex--;
+  applySnapshot(history[hIndex]);
+  updateUndoRedo();
+}
+function redo() {
+  if (hIndex >= history.length - 1) return;
+  hIndex++;
+  applySnapshot(history[hIndex]);
+  updateUndoRedo();
+}
+function updateUndoRedo() {
+  $('#btnUndo').disabled = hIndex <= 0;
+  $('#btnRedo').disabled = hIndex >= history.length - 1;
+}
+
+/* ═══════════ PATH HELPERS ═══════════ */
+function ensureFolders(p) {
+  let cur = parentOf(p);
+  while (cur) { state.folders.add(cur); cur = parentOf(cur); }
+}
+function sortPaths(a, b) {
+  const da = a.split('/').length, db = b.split('/').length;
+  return da - db || a.localeCompare(b);
+}
+function deletePath(p) {
+  const isFile = !!state.files[p];
+  if (isFile) delete state.files[p];
+  state.folders.delete(p);
+  const pre = p + '/';
+  for (const f of Object.keys(state.files)) if (f.startsWith(pre)) delete state.files[f];
+  for (const d of Array.from(state.folders)) if (d.startsWith(pre)) state.folders.delete(d);
+  if (!state.files[state.active]) state.active = Object.keys(state.files)[0] || null;
+}
+function renamePath(p, newName) {
+  newName = newName.trim().replace(/[/\\]/g, '');
+  if (!newName) throw new Error('Name cannot be empty');
+  const np = joinPath(parentOf(p), newName);
+  if (np === p) return;
+  if (state.files[np] || state.folders.has(np)) throw new Error('"' + newName + '" already exists');
+
+  if (state.files[p]) {
+    state.files[np] = state.files[p];
+    delete state.files[p];
+    if (state.active === p) state.active = np;
+  } else {
+    state.folders.delete(p);
+    state.folders.add(np);
+    const pre = p + '/';
+    for (const f of Object.keys(state.files)) {
+      if (f.startsWith(pre)) {
+        state.files[np + f.slice(p.length)] = state.files[f];
+        delete state.files[f];
+      }
+    }
+    for (const d of Array.from(state.folders)) {
+      if (d.startsWith(pre)) {
+        state.folders.delete(d);
+        state.folders.add(np + d.slice(p.length));
+      }
+    }
+    if (state.active && state.active.startsWith(pre)) {
+      state.active = np + state.active.slice(p.length);
+    }
+  }
+}
+
+/* ═══════════ BYTES / ENCODING ═══════════ */
+function contentBytes(f) {
+  if (f.bin) {
+    const b64 = f.content.split(',')[1] || '';
+    try {
+      const bin = atob(b64);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return arr;
+    } catch (e) { return new Uint8Array(0); }
+  }
+  return enc.encode(f.content);
+}
+function toDataURL(bytes, mime) {
+  let s = '';
+  const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH) {
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  }
+  return 'data:' + (mime || 'application/octet-stream') + ';base64,' + btoa(s);
+}
+function concatBytes(arrs) {
+  let total = 0;
+  for (const a of arrs) total += a.length;
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const a of arrs) { out.set(a, o); o += a.length; }
+  return out;
+}
+
+/* ═══════════ ZIP WRITER (store, no compression) ═══════════ */
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(buf) {
+  let crc = -1;
+  for (let i = 0; i < buf.length; i++) {
+    crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ buf[i]) & 0xFF];
+  }
+  return (crc ^ -1) >>> 0;
+}
+function makeZip(entries) {
+  const parts = [], central = [];
+  let offset = 0;
+  const now = new Date();
+  const dTime = ((now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)) & 0xFFFF;
+  const dDate = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xFFFF;
+
+  for (const e of entries) {
+    const nameBytes = enc.encode(e.name);
+    const data = e.data || new Uint8Array(0);
+    const crc = crc32(data);
+    const size = data.length;
+
+    const lh = new Uint8Array(30 + nameBytes.length);
+    const lv = new DataView(lh.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(6, 0, true);
+    lv.setUint16(8, 0, true);            // stored
+    lv.setUint16(10, dTime, true);
+    lv.setUint16(12, dDate, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, size, true);
+    lv.setUint32(22, size, true);
+    lv.setUint16(26, nameBytes.length, true);
+    lv.setUint16(28, 0, true);
+    lh.set(nameBytes, 30);
+
+    parts.push(lh, data);
+
+    const ch = new Uint8Array(46 + nameBytes.length);
+    const cv = new DataView(ch.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, dTime, true);
+    cv.setUint16(14, dDate, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, size, true);
+    cv.setUint32(24, size, true);
+    cv.setUint16(28, nameBytes.length, true);
+    cv.setUint16(30, 0, true);
+    cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true);
+    cv.setUint16(36, 0, true);
+    cv.setUint32(38, 0, true);
+    cv.setUint32(42, offset, true);
+    ch.set(nameBytes, 46);
+    central.push(ch);
+
+    offset += lh.length + size;
+  }
+
+  const cdSize = central.reduce((a, b) => a + b.length, 0);
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, central.length, true);
+  ev.setUint16(10, central.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, offset, true);
+  ev.setUint16(20, 0, true);
+
+  return concatBytes([...parts, ...central, eocd]);
+}
+
+/* ═══════════ ZIP READER ═══════════ */
+async function readZip(bytes) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = -1;
+  const min = Math.max(0, bytes.length - 22 - 65535);
+  for (let i = bytes.length - 22; i >= min; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('Not a valid ZIP file');
+
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const raw = [];
+
+  for (let i = 0; i < count; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true);
+    const csize  = dv.getUint32(p + 20, true);
+    const nlen   = dv.getUint16(p + 28, true);
+    const elen   = dv.getUint16(p + 30, true);
+    const clen   = dv.getUint16(p + 32, true);
+    const lho    = dv.getUint32(p + 42, true);
+    const name   = dec.decode(bytes.subarray(p + 46, p + 46 + nlen));
+
+    const lnlen = dv.getUint16(lho + 26, true);
+    const lelen = dv.getUint16(lho + 28, true);
+    const start = lho + 30 + lnlen + lelen;
+    raw.push({ name, method, data: bytes.subarray(start, start + csize) });
+    p += 46 + nlen + elen + clen;
+  }
+
+  const out = [];
+  for (const e of raw) {
+    if (e.name.endsWith('/')) continue;
+    let data;
+    if (e.method === 0) data = e.data;
+    else if (e.method === 8) {
+      const ds = new DecompressionStream('deflate-raw');
+      const stream = new Blob([e.data]).stream().pipeThrough(ds);
+      data = new Uint8Array(await new Response(stream).arrayBuffer());
+    } else {
+      throw new Error('Unsupported ZIP compression method ' + e.method);
+    }
+    out.push({ name: e.name, data });
+  }
+  return out;
+}
+
+/* ═══════════ ENCRYPTION (AES-GCM + PBKDF2) ═══════════ */
+const MAGIC = 'MIDE1';
+async function deriveKey(password, salt) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function encryptBytes(bytes, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(password, salt);
+  const ct   = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes));
+  return concatBytes([enc.encode(MAGIC), salt, iv, ct]);
+}
+async function decryptBytes(data, password) {
+  if (dec.decode(data.subarray(0, 5)) !== MAGIC) throw new Error('Not an encrypted archive');
+  const salt = data.subarray(5, 21);
+  const iv   = data.subarray(21, 33);
+  const ct   = data.subarray(33);
+  const key  = await deriveKey(password, salt);
+  return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct));
+}
+const cryptoOK = () => !!(window.crypto && crypto.subtle);
+
+/* ═══════════ DOM REFS ═══════════ */
+const codeEl      = $('#code');
+const preview     = $('#preview');
+const stripEl     = $('#strip');
+const placeholder = $('#rightPlaceholder');
+
+/* ═══════════ RENDER ═══════════ */
+function renderAll() {
+  const hasFiles = Object.keys(state.files).length > 0;
+  document.body.classList.toggle('empty', !hasFiles);
+  renderStrip();
+  renderEditor();
+  if (state.mode === 'preview') buildPreview();
+}
+function renderStrip() {
+  stripEl.innerHTML = '';
+  const paths = Object.keys(state.files).sort(sortPaths);
+  if (!paths.length) {
+    stripEl.innerHTML = '<span class="empty">No files — press ＋ to add one</span>';
+    return;
+  }
+  for (const p of paths) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (p === state.active ? ' active' : '');
+    const dir = parentOf(p);
+    b.innerHTML =
+      '<span class="ico">' + (extOf(p) === 'html' || extOf(p) === 'htm' ? '🌐' : '📄') + '</span>' +
+      '<span class="nm">' + esc(nameOf(p)) + '</span>' +
+      (dir ? '<span class="dir">' + esc(dir) + '</span>' : '');
+    b.title = p;
+    b.onclick = () => openFile(p);
+    stripEl.appendChild(b);
+  }
+  const act = stripEl.querySelector('.chip.active');
+  if (act && act.scrollIntoView) act.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
+function renderEditor() {
+  const f = state.files[state.active];
+  if (!f) {
+    codeEl.value = '';
+    codeEl.disabled = true;
+    return;
+  }
+  codeEl.disabled = !!f.bin;
+  codeEl.value = f.bin ? '⟨binary file — ' + nameOf(state.active) + '⟩' : f.content;
+}
+function openFile(p) {
+  if (!state.files[p]) return;
+  state.active = p;
+  renderAll();
+  persist();
+}
+
+/* ═══════════ PREVIEW BUILDER ═══════════ */
+function resolvePath(base, rel) {
+  if (/^(https?:|data:|blob:|mailto:|#|\/\/)/i.test(rel)) return null;
+  const parts = (rel.startsWith('/') ? rel.slice(1) : (base ? base + '/' + rel : rel)).split('/');
+  const out = [];
+  for (const seg of parts) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') out.pop();
+    else out.push(seg);
+  }
+  return out.join('/');
+}
+function pickHtmlEntry() {
+  if (state.active && /\.html?$/i.test(state.active)) return state.active;
+  if (state.files['index.html']) return 'index.html';
+  return Object.keys(state.files).find(f => /\.html?$/i.test(f)) || null;
+}
+function buildPreview() {
+  const path = pickHtmlEntry();
+  if (!path) {
+    preview.srcdoc =
+      '<!doctype html><body style="font-family:system-ui;padding:24px;color:#7b8794">' +
+      'No HTML file to preview.</body>';
+    return;
+  }
+  const base = parentOf(path);
+  let html = state.files[path].content;
+
+  // inline <link rel=stylesheet>
+  html = html.replace(/<link\b[^>]*>/gi, tag => {
+    const rel = (tag.match(/\brel\s*=\s*["']([^"']*)["']/i) || [])[1] || '';
+    if (!/stylesheet/i.test(rel)) return tag;
+    const href = (tag.match(/\bhref\s*=\s*["']([^"']*)["']/i) || [])[1];
+    if (!href) return tag;
+    const p = resolvePath(base, href);
+    const f = p && state.files[p];
+    if (!f || f.bin) return tag;
+    return '<style data-inlined="' + esc(href) + '">\n' + f.content + '\n</style>';
+  });
+
+  // inline <script src>
+  html = html.replace(
+    /<script\b([^>]*?)\bsrc\s*=\s*["']([^"']+)["']([^>]*?)>\s*<\/script>/gi,
+    (m, a, src, b) => {
+      const p = resolvePath(base, src);
+      const f = p && state.files[p];
+      if (!f || f.bin) return m;
+      return '<script data-inlined="' + esc(src) + '">\n' + f.content + '\n<\/script>';
+    });
+
+  // inline binary assets (images etc.) as data URLs
+  html = html.replace(/\bsrc\s*=\s*["']([^"']+)["']/gi, (m, src) => {
+    if (/^(https?:|data:|blob:|\/\/)/i.test(src)) return m;
+    const p = resolvePath(base, src);
+    const f = p && state.files[p];
+    if (!f || !f.bin) return m;
+    return 'src="' + f.content + '"';
+  });
+
+  preview.srcdoc = html;
+}
+
+/* ═══════════ MODE ═══════════ */
+function setMode(mode) {
+  state.mode = mode;
+  document.body.classList.toggle('mode-code', mode === 'code');
+  document.body.classList.toggle('mode-preview', mode === 'preview');
+  $('#btnCode').classList.toggle('active', mode === 'code');
+  $('#btnPreview').classList.toggle('active', mode === 'preview');
+  if (mode === 'preview') buildPreview();
+}
+
+/* ═══════════ TOASTS ═══════════ */
+function toast(msg, ms) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  $('#toasts').appendChild(t);
+  setTimeout(() => {
+    t.style.transition = 'opacity .25s';
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 260);
+  }, ms || 2400);
+}
+
+/* ═══════════ MODALS ═══════════ */
+function modal(inner, cls) {
+  const back = document.createElement('div');
+  back.className = 'modal-backdrop';
+  back.innerHTML = '<div class="modal ' + (cls || '') + '">' + inner + '</div>';
+  document.body.appendChild(back);
+  const box = back.firstElementChild;
+  const close = () => back.remove();
+  back.addEventListener('mousedown', e => { if (e.target === back) close(); });
+  return { back, box, close };
+}
+function confirmDialog(message, okText, cancelText) {
+  return new Promise(resolve => {
+    const { box, close } = modal(
+      '<h3>Are you sure?</h3>' +
+      '<p class="hint">' + esc(message) + '</p>' +
+      '<div class="actions">' +
+        '<button class="btn ghost" data-act="c">' + esc(cancelText || 'Cancel') + '</button>' +
+        '<button class="btn primary" data-act="o">' + esc(okText || 'OK') + '</button>' +
+      '</div>');
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      close(); resolve(b.dataset.act === 'o');
+    };
+  });
+}
+function choiceDialog(title, message, options) {
+  return new Promise(resolve => {
+    const btns = options.map((o, i) =>
+      '<button class="btn ' + (o.primary ? 'primary' : 'ghost') + '" data-i="' + i + '">' +
+      esc(o.label) + '</button>').join('');
+    const { box, close } = modal(
+      '<h3>' + esc(title) + '</h3>' +
+      (message ? '<p class="hint">' + esc(message) + '</p>' : '') +
+      '<div class="actions" style="flex-wrap:wrap">' + btns + '</div>');
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      close(); resolve(options[+b.dataset.i].value);
+    };
+    box.querySelector('.modal-backdrop');
+  });
+}
+function passwordDialog(title) {
+  return new Promise(resolve => {
+    const { box, close } = modal(
+      '<h3>' + esc(title) + '</h3>' +
+      '<label class="fld"><span>Password</span>' +
+      '<input type="password" id="pw" placeholder="••••••••" autocomplete="off"></label>' +
+      '<div class="actions">' +
+        '<button class="btn ghost" data-act="c">Cancel</button>' +
+        '<button class="btn primary" data-act="o">Continue</button>' +
+      '</div>');
+    const inp = box.querySelector('#pw');
+    setTimeout(() => inp.focus(), 60);
+    const done = v => { close(); resolve(v); };
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      done(b.dataset.act === 'o' ? inp.value : null);
+    };
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') done(inp.value);
+    });
+  });
+}
+
+/* ═══════════ MENUS ═══════════ */
+let openMenuEl = null, menuDocHandler = null;
+function closeMenus() {
+  if (openMenuEl) { openMenuEl.remove(); openMenuEl = null; }
+  if (menuDocHandler) {
+    document.removeEventListener('pointerdown', menuDocHandler, true);
+    menuDocHandler = null;
+  }
+}
+function showMenu(anchor, items) {
+  closeMenus();
+  const m = document.createElement('div');
+  m.className = 'menu';
+  m.innerHTML = items.map((it, i) =>
+    '<button class="mi' + (it.danger ? ' danger' : '') + '" data-i="' + i + '">' +
+    esc(it.label) + '</button>').join('');
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect();
+  const top = Math.min(r.bottom + 8, window.innerHeight - m.offsetHeight - 12);
+  m.style.top = Math.max(8, top) + 'px';
+  m.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+  openMenuEl = m;
+  m.onclick = e => {
+    const b = e.target.closest('.mi'); if (!b) return;
+    const it = items[+b.dataset.i];
+    closeMenus();
+    if (it.onClick) it.onClick();
+  };
+  menuDocHandler = e => { if (openMenuEl && !openMenuEl.contains(e.target)) closeMenus(); };
+  setTimeout(() => document.addEventListener('pointerdown', menuDocHandler, true), 0);
+}
+
+/* ═══════════ CREATE DIALOG ═══════════ */
+function createDialog(defaultFolder) {
+  return new Promise(resolve => {
+    const { box, close } = modal(
+      '<h3>Create new</h3>' +
+      '<div class="seg" id="typeSeg">' +
+        '<button data-t="file" class="active">File</button>' +
+        '<button data-t="folder">Folder</button>' +
+      '</div>' +
+      '<label class="fld"><span>Name</span>' +
+        '<input id="newName" placeholder="my-file.txt" autocomplete="off" spellcheck="false"></label>' +
+      '<div class="fld"><span>Location — tap a path</span>' +
+        '<div class="paths" id="pathList"></div></div>' +
+      '<div class="actions">' +
+        '<button class="btn ghost" data-act="c">Cancel</button>' +
+        '<button class="btn primary" data-act="o">Create</button>' +
+      '</div>');
+
+    let type = 'file';
+    let loc = defaultFolder || '';
+
+    const folders = ['', ...Array.from(state.folders).sort(sortPaths)];
+    const list = box.querySelector('#pathList');
+    list.innerHTML = folders.map(p =>
+      '<button class="pathchip' + (p === loc ? ' active' : '') + '" data-p="' + esc(p) + '">' +
+      (p === '' ? '/ (root)' : esc(p)) + '</button>').join('');
+    list.onclick = e => {
+      const b = e.target.closest('.pathchip'); if (!b) return;
+      Array.from(list.children).forEach(c => c.classList.remove('active'));
+      b.classList.add('active');
+      loc = b.dataset.p;
+    };
+
+    box.querySelector('#typeSeg').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      Array.from(b.parentNode.children).forEach(c => c.classList.remove('active'));
+      b.classList.add('active');
+      type = b.dataset.t;
+      box.querySelector('#newName').placeholder = type === 'folder' ? 'my-folder' : 'my-file.txt';
+    };
+
+    const inp = box.querySelector('#newName');
+    setTimeout(() => inp.focus(), 60);
+
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.act === 'c') { close(); return resolve(null); }
+      const name = inp.value.trim().replace(/[/\\]/g, '');
+      if (!name) { inp.focus(); return; }
+      const full = joinPath(loc, name);
+      if (state.files[full] || state.folders.has(full)) {
+        toast('"' + name + '" already exists there');
+        return;
+      }
+      close();
+      resolve({ type, path: full });
+    };
+  });
+}
+
+/* ═══════════ RENAME QUEUE (uploads ≤ 3) ═══════════ */
+function renameQueueDialog(list) {
+  return new Promise(resolve => {
+    const rows = list.map((f, i) =>
+      '<div class="uprow">' +
+        '<div class="uporig" title="' + esc(f.name) + '">' + esc(f.name) + '</div>' +
+        '<input data-i="' + i + '" value="' + esc(f.name) + '" spellcheck="false">' +
+        '<button class="btn tiny ghost" data-skip="' + i + '">Skip</button>' +
+      '</div>').join('');
+
+    const { box, close } = modal(
+      '<h3>Upload ' + list.length + ' file' + (list.length > 1 ? 's' : '') + '</h3>' +
+      '<p class="hint">Rename any of them, or press <b>Skip</b> to keep the original name.</p>' +
+      '<div class="uplist">' + rows + '</div>' +
+      '<div class="actions">' +
+        '<button class="btn ghost" data-act="c">Cancel</button>' +
+        '<button class="btn primary" data-act="o">Upload</button>' +
+      '</div>');
+
+    box.querySelector('.uplist').onclick = e => {
+      const b = e.target.closest('[data-skip]'); if (!b) return;
+      const i = b.dataset.skip;
+      const inp = box.querySelector('input[data-i="' + i + '"]');
+      if (inp.disabled) {
+        inp.disabled = false;
+        inp.value = inp.dataset.orig || list[+i].name;
+        b.textContent = 'Skip';
+      } else {
+        inp.dataset.orig = list[+i].name;
+        inp.value = list[+i].name;
+        inp.disabled = true;
+        b.textContent = 'Skipped';
+      }
+    };
+
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.act === 'c') { close(); return resolve(null); }
+      const names = list.map((f, i) => {
+        const inp = box.querySelector('input[data-i="' + i + '"]');
+        return (inp.disabled ? f.name : inp.value.trim().replace(/[/\\]/g, '')) || f.name;
+      });
+      const seen = new Set();
+      for (const n of names) {
+        if (seen.has(n)) { toast('Duplicate name: ' + n); return; }
+        seen.add(n);
+      }
+      close();
+      resolve(names);
+    };
+  });
+}
+
+/* ═══════════ UPLOAD ═══════════ */
+function pickFiles(dest) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.multiple = true;
+  inp.style.display = 'none';
+  inp.onchange = async () => {
+    const list = Array.from(inp.files || []);
+    inp.remove();
+    if (!list.length) return;
+    await handleUploads(list, dest || '');
+  };
+  document.body.appendChild(inp);
+  inp.click();
+}
+async function handleUploads(list, dest) {
+  let names;
+  if (list.length <= 3) {
+    names = await renameQueueDialog(list);
+    if (!names) return;
+  } else {
+    names = list.map(f => f.name);
+  }
+
+  let added = 0;
+  for (let i = 0; i < list.length; i++) {
+    const file = list[i];
+    const path = joinPath(dest, names[i]);
+    if (state.files[path] || state.folders.has(path)) {
+      toast('Skipped duplicate: ' + names[i]);
+      continue;
+    }
+    const bin = !isTextName(names[i]) ||
+                /^(image|audio|video|font|application\/pdf)\//.test(file.type || '');
+    let content;
+    if (bin) {
+      content = toDataURL(new Uint8Array(await file.arrayBuffer()), file.type || mimeFor(names[i]));
+    } else {
+      content = await file.text();
+    }
+    state.files[path] = { content, bin };
+    ensureFolders(path);
+    added++;
+  }
+
+  if (added) {
+    if (!state.active) state.active = Object.keys(state.files).sort(sortPaths)[0];
+    renderAll();
+    persist();
+    commitHistory();
+    toast('Uploaded ' + added + ' file' + (added > 1 ? 's' : ''));
+  }
+}
+
+/* ═══════════ DOWNLOADS / ZIP ═══════════ */
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+function gatherPaths(paths) {
+  const set = new Set();
+  for (const p of paths) {
+    if (state.files[p]) { set.add(p); continue; }
+    if (state.folders.has(p)) set.add(p);
+    const pre = p + '/';
+    for (const f of Object.keys(state.files)) if (f.startsWith(pre)) set.add(f);
+    for (const d of state.folders) if (d.startsWith(pre)) set.add(d);
+  }
+  return set;
+}
+async function downloadZip(paths, encrypt) {
+  const roots = (paths && paths.length)
+    ? paths
+    : [...Object.keys(state.files), ...Array.from(state.folders)];
+
+  const set = gatherPaths(roots);
+  const entries = [];
+  for (const p of set) {
+    if (state.folders.has(p)) entries.push({ name: p + '/', data: new Uint8Array(0) });
+    else if (state.files[p]) entries.push({ name: p, data: contentBytes(state.files[p]) });
+  }
+  if (!entries.length) { toast('Nothing to download'); return; }
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+
+  let bytes = makeZip(entries);
+  let fname = 'project.zip';
+
+  if (encrypt) {
+    if (!cryptoOK()) { toast('Encryption is not available in this browser'); return; }
+    const pw = await passwordDialog('Set a password for the archive');
+    if (!pw) return;
+    try {
+      bytes = await encryptBytes(bytes, pw);
+      fname = 'project.zip.enc';
+    } catch (e) {
+      toast('Encryption failed: ' + e.message);
+      return;
+    }
+  }
+
+  downloadBlob(new Blob([bytes], { type: 'application/octet-stream' }), fname);
+  toast('Downloaded ' + fname);
+}
+async function downloadSingle(path) {
+  const f = state.files[path];
+  if (!f) return;
+  downloadBlob(new Blob([contentBytes(f)], { type: mimeFor(path) }), nameOf(path));
+}
+
+/* ═══════════ IMPORT ═══════════ */
+function importEntries(entries) {
+  let n = 0;
+  for (const e of entries) {
+    const path = e.name.replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!path) continue;
+    const bin = !isTextName(path);
+    const content = bin
+      ? toDataURL(e.data, mimeFor(path))
+      : dec.decode(e.data);
+    state.files[path] = { content, bin };
+    ensureFolders(path);
+    n++;
+  }
+  if (!state.active || !state.files[state.active]) {
+    state.active = Object.keys(state.files).sort(sortPaths)[0] || null;
+  }
+  renderAll(); persist(); commitHistory();
+  return n;
+}
+function pickImport(mode) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = mode === 'enc' ? '*' : '.zip,application/zip';
+  inp.style.display = 'none';
+  inp.onchange = async () => {
+    const file = (inp.files || [])[0];
+    inp.remove();
+    if (!file) return;
+    try {
+      let bytes = new Uint8Array(await file.arrayBuffer());
+      if (mode === 'enc') {
+        if (!cryptoOK()) { toast('Decryption is not available here'); return; }
+        const pw = await passwordDialog('Enter the archive password');
+        if (!pw) return;
+        bytes = await decryptBytes(bytes, pw);
+      }
+      const entries = await readZip(bytes);
+      const n = importEntries(entries);
+      toast('Imported ' + n + ' file' + (n === 1 ? '' : 's'));
+    } catch (e) {
+      toast('Import failed: ' + (e.message || e));
+    }
+  };
+  document.body.appendChild(inp);
+  inp.click();
+}
+
+/* ═══════════ FILE SYSTEM ACCESS — SAVE ═══════════ */
+async function saveToFolder() {
+  if (!('showDirectoryPicker' in window)) {
+    const go = await confirmDialog(
+      'This browser cannot write into folders. Download a ZIP of the project instead?',
+      'Download ZIP', 'Cancel');
+    if (go) downloadZip(null, false);
+    return;
+  }
+  let dir;
+  try {
+    dir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'miniide' });
+  } catch (e) {
+    if (e.name !== 'AbortError') toast('Folder selection cancelled');
+    return;
+  }
+  try {
+    if (dir.queryPermission) {
+      let perm = await dir.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') perm = await dir.requestPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') { toast('Write permission denied'); return; }
+    }
+    const removed = await syncDirectory(dir);
+    toast('Saved to “' + dir.name + '”' + (removed ? ' · removed ' + removed + ' extra item(s)' : ''));
+  } catch (e) {
+    if (e && e.message === '__cancelled') return;
+    toast('Save failed: ' + (e.message || e));
+  }
+}
+async function syncDirectory(dirHandle) {
+  let removed = 0;
+
+  // 1. prune anything in the target folder that isn't part of the project
+  const extra = [];
+  const wantedFiles = new Set(), wantedDirs = new Set();
+  for (const f of Object.keys(state.files)) if (parentOf(f) === '') wantedFiles.add(nameOf(f));
+  for (const d of state.folders) if (parentOf(d) === '') wantedDirs.add(nameOf(d));
+
+  for await (const [name, handle] of dirHandle.entries()) {
+    if (handle.kind === 'file' && !wantedFiles.has(name)) extra.push([name, false]);
+    if (handle.kind === 'directory' && !wantedDirs.has(name)) extra.push([name, true]);
+  }
+
+  if (extra.length) {
+    const preview = extra.slice(0, 5).map(x => '• ' + x[0]).join('\n');
+    const more = extra.length > 5 ? '\n…and ' + (extra.length - 5) + ' more' : '';
+    const ok = await confirmDialog(
+      'The selected folder contains ' + extra.length + ' item(s) that are not part of this project:\n\n' +
+      preview + more + '\n\nThey will be permanently deleted.',
+      'Delete & Save', 'Cancel');
+    if (!ok) throw new Error('__cancelled');
+    for (const [name, isDir] of extra) {
+      await dirHandle.removeEntry(name, { recursive: isDir });
+      removed++;
+    }
+  }
+
+  // 2. write the project tree
+  await writeInto(dirHandle, '');
+  return removed;
+}
+async function writeInto(dirHandle, prefix) {
+  for (const f of Object.keys(state.files)) {
+    if (parentOf(f) !== prefix) continue;
+    const fh = await dirHandle.getFileHandle(nameOf(f), { create: true });
+    const w = await fh.createWritable();
+    await w.write(contentBytes(state.files[f]));
+    await w.close();
+  }
+  for (const d of state.folders) {
+    if (parentOf(d) !== prefix) continue;
+    const dh = await dirHandle.getDirectoryHandle(nameOf(d), { create: true });
+    await writeInto(dh, d);
+  }
+}
+
+/* ═══════════ FILE SYSTEM ACCESS — OPEN ═══════════ */
+async function openFolder() {
+  if (!('showDirectoryPicker' in window)) {
+    toast('Opening folders needs Chrome / Edge. Use “Import .zip” instead.');
+    return;
+  }
+  let dir;
+  try {
+    dir = await window.showDirectoryPicker({ id: 'miniide-open' });
+  } catch (e) { return; }
+
+  const files = [], folders = [];
+  try {
+    await readDirRecursive(dir, '', files, folders);
+  } catch (e) {
+    toast('Could not read folder: ' + (e.message || e));
+    return;
+  }
+  if (!files.length && !folders.length) { toast('That folder is empty'); return; }
+
+  const mode = await choiceDialog(
+    'Load “' + dir.name + '”',
+    files.length + ' file(s) found. Replace the current project, or merge the folder into it?',
+    [
+      { label: 'Merge', value: 'merge', primary: true },
+      { label: 'Replace', value: 'replace' },
+      { label: 'Cancel', value: null }
+    ]);
+  if (!mode) return;
+
+  if (mode === 'replace') {
+    state.files = {};
+    state.folders = new Set();
+  }
+  folders.forEach(d => state.folders.add(d));
+  for (const f of files) {
+    const bin = !isTextName(f.path);
+    state.files[f.path] = {
+      content: bin ? toDataURL(f.buf, f.mime || mimeFor(f.path)) : dec.decode(f.buf),
+      bin
+    };
+    ensureFolders(f.path);
+  }
+  if (!state.active || !state.files[state.active]) {
+    state.active = state.files['index.html'] ? 'index.html'
+      : Object.keys(state.files).sort(sortPaths)[0] || null;
+  }
+  renderAll(); persist(); commitHistory();
+  toast('Loaded ' + files.length + ' file(s) from “' + dir.name + '”');
+}
+async function readDirRecursive(dirHandle, prefix, files, folders) {
+  for await (const [name, handle] of dirHandle.entries()) {
+    const path = prefix ? prefix + '/' + name : name;
+    if (handle.kind === 'directory') {
+      folders.push(path);
+      await readDirRecursive(handle, path, files, folders);
+    } else {
+      const file = await handle.getFile();
+      const buf = new Uint8Array(await file.arrayBuffer());
+      files.push({ path, buf, mime: file.type });
+    }
+  }
+}
+
+/* ═══════════ FILE MANAGER (List expand) ═══════════ */
+function buildTree() {
+  const root = { name: '', path: '', folders: [], files: [] };
+  const map = { '': root };
+
+  for (const d of Array.from(state.folders).sort(sortPaths)) {
+    const node = { name: nameOf(d), path: d, folders: [], files: [] };
+    map[d] = node;
+    const par = map[parentOf(d)] || root;
+    par.folders.push(node);
+  }
+  for (const f of Object.keys(state.files).sort(sortPaths)) {
+    const par = map[parentOf(f)] || root;
+    par.files.push({ name: nameOf(f), path: f });
+  }
+  return root;
+}
+
+function openManager() {
+  const sel = new Set();
+  const collapsed = new Set();
+  const { box, close } = modal(
+    '<div class="mhead">' +
+      '<strong>Project files</strong>' +
+      '<div style="display:flex;gap:6px">' +
+        '<button class="icon-btn sm" id="mAdd" title="Add">＋</button>' +
+        '<button class="icon-btn sm" id="mClose" title="Close">✕</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="mtree" id="mTree"></div>' +
+    '<div class="mfoot">' +
+      '<button class="btn" id="mDl">⬇ Download</button>' +
+      '<button class="btn" id="mZip">🗜 ZIP</button>' +
+      '<button class="btn" id="mEnc">🔒 Encrypted</button>' +
+      '<button class="btn" id="mRen">✎ Rename</button>' +
+      '<button class="btn danger" id="mDel">🗑 Delete</button>' +
+    '</div>', 'wide');
+
+  const treeEl = box.querySelector('#mTree');
+
+  function render() {
+    treeEl.innerHTML = '';
+    const root = buildTree();
+
+    const row = (path, name, kind, depth) => {
+      const el = document.createElement('div');
+      el.className = 'frow' + (sel.has(path) ? ' sel' : '');
+      el.style.paddingLeft = (8 + depth * 15) + 'px';
+      el.dataset.p = path;
+      el.dataset.kind = kind;
+      el.innerHTML =
+        '<input type="checkbox" class="fchk"' + (sel.has(path) ? ' checked' : '') + '>' +
+        (kind === 'folder'
+          ? '<button class="ftog">' + (collapsed.has(path) ? '▸' : '▾') + '</button>'
+          : '<span class="ftog"></span>') +
+        '<span class="fico">' + (kind === 'folder' ? '📁' : (extOf(name) === 'html' ? '🌐' : '📄')) + '</span>' +
+        '<span class="fname">' + esc(name) + '</span>' +
+        '<span class="factions">' +
+          (kind === 'file' ? '<button class="mini" data-a="dl" title="Download">⬇</button>' : '') +
+          '<button class="mini" data-a="rn" title="Rename">✎</button>' +
+          '<button class="mini" data-a="rm" title="Delete">🗑</button>' +
+        '</span>';
+      return el;
+    };
+
+    const walk = (node, depth) => {
+      for (const d of node.folders) {
+        treeEl.appendChild(row(d.path, d.name, 'folder', depth));
+        if (!collapsed.has(d.path)) walk(d, depth + 1);
+      }
+      for (const f of node.files) {
+        treeEl.appendChild(row(f.path, f.name, 'file', depth));
+      }
+    };
+    walk(root, 0);
+
+    if (!treeEl.children.length) {
+      treeEl.innerHTML = '<div class="mempty">No files yet — press ＋ to create one</div>';
+    }
+  }
+
+  function selectedPaths() {
+    return Array.from(sel);
+  }
+
+  /* row interactions */
+  treeEl.addEventListener('click', async e => {
+    const rowEl = e.target.closest('.frow');
+    if (!rowEl) return;
+    const path = rowEl.dataset.p;
+    const kind = rowEl.dataset.kind;
+
+    if (e.target.classList.contains('fchk')) {
+      if (e.target.checked) sel.add(path); else sel.delete(path);
+      rowEl.classList.toggle('sel', e.target.checked);
+      return;
+    }
+    if (e.target.classList.contains('ftog') && kind === 'folder') {
+      if (collapsed.has(path)) collapsed.delete(path); else collapsed.add(path);
+      render();
+      return;
+    }
+    const act = e.target.closest('.mini');
+    if (act) {
+      e.stopPropagation();
+      const a = act.dataset.a;
+      if (a === 'dl') { await downloadSingle(path); }
+      if (a === 'rm') {
+        const ok = await confirmDialog('Delete “' + nameOf(path) + '” and everything inside it?', 'Delete', 'Cancel');
+        if (!ok) return;
+        deletePath(path);
+        sel.delete(path);
+        renderAll(); persist(); commitHistory();
+        render();
+        toast('Deleted ' + nameOf(path));
+      }
+      if (a === 'rn') {
+        const nn = await promptRename(path);
+        if (!nn) return;
+        try {
+          renamePath(path, nn);
+          renderAll(); persist(); commitHistory();
+          render();
+          toast('Renamed to ' + nn);
+        } catch (err) { toast(err.message); }
+      }
+      return;
+    }
+
+    // plain row click
+    if (kind === 'file') { openFile(path); close(); }
+    else { if (collapsed.has(path)) collapsed.delete(path); else collapsed.add(path); render(); }
+  });
+
+  /* header */
+  box.querySelector('#mClose').onclick = close;
+  box.querySelector('#mAdd').onclick = ev => {
+    showMenu(ev.currentTarget, [
+      { label: '⬆  Upload from device…', onClick: () => pickFiles('') },
+      { label: '📄  Create file…', onClick: async () => {
+          const r = await createDialog('');
+          if (!r) return;
+          applyCreate(r); render();
+      } },
+      { label: '📁  Create folder…', onClick: async () => {
+          const r = await createDialog('');
+          if (!r) return;
+          r.type = 'folder';
+          applyCreate(r); render();
+      } }
+    ]);
+  };
+
+  /* footer */
+  box.querySelector('#mDl').onclick = async () => {
+    const s = selectedPaths();
+    if (s.length === 1 && state.files[s[0]]) { await downloadSingle(s[0]); return; }
+    await downloadZip(s.length ? s : null, false);
+  };
+  box.querySelector('#mZip').onclick = () => downloadZip(selectedPaths().length ? selectedPaths() : null, false);
+  box.querySelector('#mEnc').onclick = () => downloadZip(selectedPaths().length ? selectedPaths() : null, true);
+
+  box.querySelector('#mRen').onclick = async () => {
+    const s = selectedPaths();
+    if (s.length !== 1) { toast('Select exactly one item to rename'); return; }
+    const nn = await promptRename(s[0]);
+    if (!nn) return;
+    try {
+      renamePath(s[0], nn);
+      sel.clear();
+      renderAll(); persist(); commitHistory();
+      render();
+      toast('Renamed to ' + nn);
+    } catch (err) { toast(err.message); }
+  };
+
+  box.querySelector('#mDel').onclick = async () => {
+    const s = selectedPaths();
+    if (!s.length) { toast('Nothing selected'); return; }
+    const ok = await confirmDialog(
+      'Delete ' + s.length + ' selected item(s) and everything inside them?',
+      'Delete', 'Cancel');
+    if (!ok) return;
+    s.forEach(deletePath);
+    sel.clear();
+    renderAll(); persist(); commitHistory();
+    render();
+    toast('Deleted ' + s.length + ' item(s)');
+  };
+
+  render();
+}
+
+function promptRename(path) {
+  return new Promise(resolve => {
+    const isFolder = state.folders.has(path);
+    const { box, close } = modal(
+      '<h3>Rename ' + (isFolder ? 'folder' : 'file') + '</h3>' +
+      '<label class="fld"><span>New name</span>' +
+        '<input id="rn" value="' + esc(nameOf(path)) + '" spellcheck="false" autocomplete="off"></label>' +
+      '<div class="actions">' +
+        '<button class="btn ghost" data-act="c">Cancel</button>' +
+        '<button class="btn primary" data-act="o">Rename</button>' +
+      '</div>');
+    const inp = box.querySelector('#rn');
+    setTimeout(() => { inp.focus(); inp.select(); }, 60);
+    const done = v => { close(); resolve(v); };
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      done(b.dataset.act === 'o' ? inp.value : null);
+    };
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(inp.value); });
+  });
+}
+
+/* ═══════════ CREATE APPLY ═══════════ */
+function applyCreate(r) {
+  if (r.type === 'folder') {
+    state.folders.add(r.path);
+    ensureFolders(r.path);
+  } else {
+    state.files[r.path] = { content: '', bin: false };
+    ensureFolders(r.path);
+    state.active = r.path;
+  }
+  renderAll(); persist(); commitHistory();
+  toast((r.type === 'folder' ? 'Folder ' : 'File ') + nameOf(r.path) + ' created');
+}
+
+/* ═══════════ TOP-LEVEL ACTIONS ═══════════ */
+async function actionNew() {
+  const r = await createDialog('');
+  if (r) applyCreate(r);
+}
+async function actionUpload() {
+  pickFiles('');
+}
+function actionHome() {
+  closeMenus();
+  $$('.modal-backdrop').forEach(m => m.remove());
+  setMode('code');
+  if (state.files['index.html']) openFile('index.html');
+  else renderAll();
+}
+function menuItems() {
+  return [
+    { label: '📄  New file / folder…', onClick: actionNew },
+    { label: '⬆  Upload files…', onClick: actionUpload },
+    { label: '—', onClick: () => {} },
+    { label: '🗜  Download project (.zip)', onClick: () => downloadZip(null, false) },
+    { label: '🔒  Download encrypted archive…', onClick: () => downloadZip(null, true) },
+    { label: '📦  Import .zip…', onClick: () => pickImport('zip') },
+    { label: '🔓  Import encrypted archive…', onClick: () => pickImport('enc') },
+    { label: '—', onClick: () => {} },
+    { label: '♻  Reset project', danger: true, onClick: async () => {
+        const ok = await confirmDialog('Delete all files and start over with the demo project?', 'Reset', 'Cancel');
+        if (!ok) return;
+        state.files = {};
+        state.folders = new Set();
+        loadSeed();
+        renderAll(); persist(); commitHistory();
+        toast('Project reset');
+      } }
+  ].filter(i => i.label !== '—');
+}
+function loadSeed() {
+  state.files = {};
+  state.folders = new Set();
+  for (const [p, c] of Object.entries(SEED)) {
+    state.files[p] = { content: c, bin: false };
+    ensureFolders(p);
+  }
+  state.active = 'index.html';
+}
+
+/* ═══════════ WIRING ═══════════ */
+$('#btnHome').onclick       = actionHome;
+$('#btnUndo').onclick       = undo;
+$('#btnRedo').onclick       = redo;
+$('#btnMenu').onclick       = e => showMenu(e.currentTarget, menuItems());
+$('#btnSave').onclick       = saveToFolder;
+$('#btnCode').onclick       = () => setMode('code');
+$('#btnPreview').onclick    = () => setMode('preview');
+$('#btnNew').onclick        = actionNew;
+$('#btnOpenFolder').onclick = openFolder;
+$('#btnExpand').onclick     = openManager;
+$('#btnUpload').onclick     = actionUpload;
+$('#btnFab').onclick        = e => showMenu(e.currentTarget, [
+  { label: '⬆  Upload from device…', onClick: actionUpload },
+  { label: '📄  Create file / folder…', onClick: actionNew }
+]);
+
+/* editor */
+codeEl.addEventListener('input', () => {
+  const f = state.files[state.active];
+  if (!f || f.bin) return;
+  f.content = codeEl.value;
+  scheduleSave();
+  commitHistory();
+});
+codeEl.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    setMode('preview');
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    saveToFolder();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+    // let the browser handle in-textarea undo; project undo is on the toolbar
+    return;
+  }
+  if (e.key === 'Tab' && !e.shiftKey) {
+    e.preventDefault();
+    const s = codeEl.selectionStart, en = codeEl.selectionEnd;
+    codeEl.value = codeEl.value.substring(0, s) + '  ' + codeEl.value.substring(en);
+    codeEl.selectionStart = codeEl.selectionEnd = s + 2;
+    const f = state.files[state.active];
+    if (f) { f.content = codeEl.value; scheduleSave(); commitHistory(); }
+  }
+});
+
+/* global shortcuts */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeMenus(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    openManager();
+  }
+});
+
+window.addEventListener('beforeunload', persist);
+
+/* ═══════════ BOOT ═══════════ */
+(function boot() {
+  if (!restore()) loadSeed();
+  renderAll();
+  seedHistory();
+  setMode('code');
+})();
+</script>
+</body>
+</html>
