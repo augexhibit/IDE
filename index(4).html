@@ -1,0 +1,2405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mini IDE</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+
+  :root{
+    --bg-1:#eef2fa;
+    --bg-2:#dfe7f6;
+    --surface:rgba(255,255,255,.86);
+    --surface-solid:#ffffff;
+    --surface-2:#f6f8fd;
+    --surface-3:#eef2f9;
+    --border:rgba(213,222,238,.9);
+    --border-2:#d3dcea;
+    --ink:#141d2b;
+    --ink-2:#4b5a70;
+    --ink-3:#8b97a9;
+    --accent:#5b5bd6;
+    --accent-2:#8b5cf6;
+    --accent-soft:#eef0ff;
+    --accent-ring:rgba(91,91,214,.20);
+    --danger:#e0413f;
+    --danger-soft:#fdeeee;
+    --shadow-xs:0 1px 2px rgba(16,26,44,.05);
+    --shadow-sm:0 2px 10px rgba(16,26,44,.06);
+    --shadow-md:0 10px 28px rgba(16,26,44,.10);
+    --shadow-lg:0 26px 60px rgba(16,26,44,.20);
+    --radius:18px;
+    --ease:cubic-bezier(.4,0,.2,1);
+  }
+
+  html,body{height:100%}
+  body{
+    font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    background:
+      radial-gradient(1200px 620px at 6% -14%, #ffffff 0%, transparent 58%),
+      radial-gradient(900px 520px at 104% -4%, #e7ecff 0%, transparent 52%),
+      radial-gradient(1000px 700px at 48% 124%, #d9e2fa 0%, transparent 56%),
+      linear-gradient(168deg,var(--bg-1) 0%, #e7edf9 52%, var(--bg-2) 100%);
+    color:var(--ink);
+    display:flex;flex-direction:column;
+    height:100dvh;overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-font-smoothing:antialiased;
+    position:relative;
+  }
+  body::before,body::after{
+    content:'';position:fixed;border-radius:50%;pointer-events:none;z-index:-1;
+    filter:blur(72px);opacity:.6;
+  }
+  body::before{
+    width:520px;height:520px;left:-180px;top:-200px;
+    background:radial-gradient(circle at 40% 40%, #c9d4ff, #e4e9ff 58%, transparent 72%);
+    animation:drift1 24s ease-in-out infinite;
+  }
+  body::after{
+    width:640px;height:640px;right:-240px;bottom:-260px;
+    background:radial-gradient(circle at 45% 45%, #ded4ff, #efeaff 58%, transparent 72%);
+    animation:drift2 30s ease-in-out infinite;
+  }
+  @keyframes drift1{50%{transform:translate3d(58px,44px,0) scale(1.09)}}
+  @keyframes drift2{50%{transform:translate3d(-64px,-38px,0) scale(1.07)}}
+
+  /* ───────── top bar ───────── */
+  .topbar{
+    display:flex;align-items:center;gap:10px;
+    padding:14px 16px 8px;flex:none;
+  }
+  .icon-btn{
+    width:44px;height:44px;flex:none;
+    border:1px solid var(--border);
+    background:var(--surface);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border-radius:14px;
+    box-shadow:var(--shadow-xs);
+    display:grid;place-items:center;cursor:pointer;color:var(--ink-2);
+    transition:all .18s var(--ease);
+  }
+  .icon-btn:hover{
+    color:var(--accent);border-color:rgba(91,91,214,.45);
+    background:#fff;
+    transform:translateY(-1px);
+    box-shadow:0 6px 18px var(--accent-ring);
+  }
+  .icon-btn:active{transform:translateY(0) scale(.95)}
+  .icon-btn:disabled{opacity:.3;cursor:not-allowed;transform:none;box-shadow:none}
+  .icon-btn:disabled:hover{color:var(--ink-3);border-color:var(--border);background:var(--surface);box-shadow:var(--shadow-xs)}
+  .icon-btn.sm{width:38px;height:38px;border-radius:12px}
+
+  .actions-group{
+    display:flex;gap:4px;background:var(--surface);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border:1px solid var(--border);border-radius:15px;
+    padding:4px;box-shadow:var(--shadow-xs);flex:none;
+  }
+  .actions-group .icon-btn{
+    border:none;box-shadow:none;background:transparent;
+    width:38px;height:38px;border-radius:11px;backdrop-filter:none;
+  }
+  .actions-group .icon-btn:hover{background:var(--accent-soft);box-shadow:none;transform:none}
+
+  .file-strip{
+    flex:1;min-width:0;display:flex;align-items:center;gap:8px;
+    overflow-x:auto;overflow-y:hidden;
+    background:var(--surface);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border:1px solid var(--border);
+    border-radius:15px;
+    padding:6px 10px;height:46px;
+    box-shadow:var(--shadow-xs);
+    scrollbar-width:none;
+  }
+  .file-strip::-webkit-scrollbar{display:none}
+  .file-strip .empty{
+    font-size:12.5px;color:var(--ink-3);font-weight:600;
+    padding:0 8px;font-style:italic;
+  }
+  .chip{
+    flex:none;display:inline-flex;align-items:center;gap:8px;
+    border:1px solid transparent;background:rgba(238,242,249,.9);
+    border-radius:11px;padding:6px 13px 6px 8px;
+    font-size:12.5px;font-weight:600;color:var(--ink-2);
+    cursor:pointer;white-space:nowrap;
+    transition:all .18s var(--ease);
+    font-family:inherit;
+  }
+  .chip:hover{background:var(--accent-soft);color:var(--accent);transform:translateY(-1px)}
+  .chip.active{
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    color:#fff;
+    box-shadow:0 6px 16px var(--accent-ring);
+  }
+  .chip .ico{
+    width:22px;height:22px;flex:none;border-radius:7px;
+    display:grid;place-items:center;font-size:12px;line-height:1;
+    background:rgba(91,91,214,.10);
+  }
+  .chip.active .ico{background:rgba(255,255,255,.22)}
+  .chip .dir{
+    opacity:.5;font-weight:500;font-size:11px;
+    padding-left:8px;border-left:1px solid currentColor;
+    margin-left:2px;
+  }
+  .chip.active .dir{opacity:.78}
+
+  /* ───────── tool row ───────── */
+  .toolrow{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:14px;padding:4px 16px 14px;flex:none;
+  }
+
+  .save-btn{
+    display:inline-flex;align-items:center;gap:9px;
+    padding:11px 22px;border:none;border-radius:13px;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    color:#fff;font-size:13px;font-weight:700;letter-spacing:.3px;
+    cursor:pointer;font-family:inherit;
+    box-shadow:0 8px 22px rgba(91,91,214,.34);
+    transition:all .2s var(--ease);
+  }
+  .save-btn:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(91,91,214,.44)}
+  .save-btn:active{transform:translateY(0) scale(.97)}
+  .save-btn svg{opacity:.95}
+
+  .toggle{
+    display:inline-flex;background:var(--surface);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border:1px solid var(--border);border-radius:14px;
+    padding:4px;gap:3px;box-shadow:var(--shadow-xs);
+  }
+  .toggle button{
+    border:none;background:transparent;padding:9px 28px;
+    font-size:12.5px;font-weight:700;letter-spacing:.6px;
+    color:var(--ink-2);border-radius:11px;cursor:pointer;
+    transition:all .2s var(--ease);
+    text-transform:uppercase;font-family:inherit;
+  }
+  .toggle button:hover:not(.active){color:var(--accent)}
+  .toggle button.active{
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    color:#fff;box-shadow:0 5px 14px var(--accent-ring);
+  }
+
+  /* ───────── split ───────── */
+  .split{
+    flex:1;display:grid;grid-template-columns:84px 1fr;gap:12px;
+    padding:0 16px 16px;min-height:0;
+  }
+  .rail{
+    background:var(--surface);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    padding:10px 8px;overflow-y:auto;
+    box-shadow:var(--shadow-sm);
+    scrollbar-width:none;
+  }
+  .rail::-webkit-scrollbar{display:none}
+  .railbtn{
+    flex:none;width:64px;height:64px;border-radius:15px;
+    border:1px solid transparent;
+    background:rgba(246,248,253,.85);
+    color:var(--ink-2);cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:4px;padding:4px;font-family:inherit;
+    font-size:9.5px;font-weight:700;line-height:1.1;
+    letter-spacing:.3px;text-align:center;
+    transition:all .2s var(--ease);
+  }
+  .railbtn svg{opacity:.7;transition:opacity .2s}
+  .railbtn:hover{
+    background:linear-gradient(135deg,#eef0ff,#f5f0ff);
+    border-color:rgba(91,91,214,.35);
+    color:var(--accent);transform:translateY(-2px);
+    box-shadow:0 8px 20px var(--accent-ring);
+  }
+  .railbtn:hover svg{opacity:1}
+  .railbtn:active{transform:translateY(0) scale(.95)}
+
+  .pane{
+    background:var(--surface-solid);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    display:flex;flex-direction:column;overflow:hidden;
+    position:relative;min-height:0;
+    box-shadow:var(--shadow-md);
+  }
+  .pane-chrome{
+    display:flex;gap:7px;padding:12px 16px;
+    background:linear-gradient(180deg,#f8fafd,#f2f5fb);
+    border-bottom:1px solid var(--border);
+    flex:none;
+  }
+  .pane-chrome .dot{width:11px;height:11px;border-radius:50%}
+  .dot:nth-child(1){background:#ff5f57;box-shadow:0 0 0 1px rgba(0,0,0,.04)}
+  .dot:nth-child(2){background:#febc2e;box-shadow:0 0 0 1px rgba(0,0,0,.04)}
+  .dot:nth-child(3){background:#28c840;box-shadow:0 0 0 1px rgba(0,0,0,.04)}
+
+  textarea#code{
+    flex:1;width:100%;border:none;outline:none;resize:none;
+    padding:20px 22px;
+    font-family:'JetBrains Mono','Fira Code','SF Mono',Consolas,Monaco,monospace;
+    font-size:13px;line-height:1.75;
+    background:#fcfdff;color:#1e293b;tab-size:2;
+    display:none;white-space:pre;overflow:auto;
+  }
+  textarea#code::placeholder{color:var(--ink-3);font-style:italic}
+  textarea#code::-webkit-scrollbar{width:10px;height:10px}
+  textarea#code::-webkit-scrollbar-thumb{background:#d3dbe6;border-radius:10px;border:3px solid #fcfdff}
+  textarea#code::-webkit-scrollbar-thumb:hover{background:#b8c3d2}
+
+  iframe#preview{
+    flex:1;width:100%;border:none;background:#fff;display:none;
+  }
+
+  .pane .placeholder{
+    flex:1;display:grid;place-items:center;
+    font-size:14px;font-weight:600;text-align:center;padding:16px;
+    color:var(--ink-3);
+    background:
+      radial-gradient(500px 300px at 50% 0%, #f7f9ff 0%, transparent 70%),
+      #fcfdff;
+  }
+  .placeholder-inner{
+    display:flex;flex-direction:column;align-items:center;gap:16px;
+    color:var(--ink-3);max-width:280px;
+  }
+  .placeholder-inner .glyph{
+    width:72px;height:72px;border-radius:22px;
+    display:grid;place-items:center;
+    background:linear-gradient(135deg,#eef1ff,#f7f3ff);
+    border:1px solid rgba(91,91,214,.16);
+    box-shadow:0 10px 26px rgba(91,91,214,.14);
+    color:var(--accent);
+  }
+  .placeholder-inner p{font-size:13.5px;font-weight:600;letter-spacing:.2px;line-height:1.55}
+  .placeholder-inner .sub{font-size:12px;font-weight:500;color:var(--ink-3);opacity:.85}
+
+  body.mode-code textarea#code{display:block}
+  body.mode-code iframe#preview{display:none}
+  body.mode-preview textarea#code{display:none}
+  body.mode-preview iframe#preview{display:block}
+  body.mode-code #rightPlaceholder,
+  body.mode-preview #rightPlaceholder{display:none}
+  body.empty #rightPlaceholder{display:grid !important}
+  body.empty textarea#code,
+  body.empty iframe#preview{display:none !important}
+
+  /* ───────── FAB ───────── */
+  .fab{
+    position:fixed;right:22px;bottom:28px;
+    width:60px;height:60px;border-radius:50%;border:none;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    color:#fff;cursor:pointer;display:grid;place-items:center;
+    box-shadow:0 12px 30px rgba(91,91,214,.44);
+    z-index:40;
+    transition:all .25s var(--ease);
+  }
+  .fab:hover{transform:translateY(-3px) rotate(90deg);box-shadow:0 16px 36px rgba(91,91,214,.55)}
+  .fab:active{transform:translateY(0) rotate(90deg) scale(.93)}
+
+  /* ───────── modal ───────── */
+  .modal-backdrop{
+    position:fixed;inset:0;z-index:100;
+    background:rgba(15,23,42,.40);
+    backdrop-filter:blur(10px) saturate(140%);
+    -webkit-backdrop-filter:blur(10px) saturate(140%);
+    display:flex;align-items:center;justify-content:center;padding:16px;
+    animation:fade .18s ease;
+  }
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{
+    background:var(--surface-solid);border-radius:22px;padding:24px;
+    width:100%;max-width:440px;max-height:88dvh;
+    display:flex;flex-direction:column;gap:16px;
+    box-shadow:var(--shadow-lg);
+    animation:pop .22s var(--ease);
+    border:1px solid rgba(255,255,255,.7);
+    overflow:auto;
+  }
+  @keyframes pop{from{transform:scale(.94) translateY(10px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+  .modal.wide{max-width:680px;height:88dvh}
+  .modal h3{font-size:17.5px;font-weight:800;letter-spacing:-.3px;color:var(--ink)}
+  .modal .hint{font-size:12.5px;color:var(--ink-2);line-height:1.6}
+  .modal .hint b{color:var(--ink)}
+
+  .fld{display:flex;flex-direction:column;gap:7px}
+  .fld > span{
+    font-size:11px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.8px;color:var(--ink-3);
+  }
+  .fld input{
+    width:100%;border:1.6px solid var(--border);border-radius:13px;
+    padding:12px 14px;font-size:14px;font-family:inherit;
+    outline:none;background:var(--surface-2);color:var(--ink);
+    transition:all .16s;
+  }
+  .fld input:focus{
+    border-color:var(--accent);background:#fff;
+    box-shadow:0 0 0 4px var(--accent-ring);
+  }
+
+  .paths{
+    display:flex;flex-wrap:wrap;gap:7px;max-height:140px;overflow:auto;
+    background:var(--surface-2);border-radius:13px;padding:10px;
+    border:1px solid var(--border);
+  }
+  .paths::-webkit-scrollbar{width:8px}
+  .paths::-webkit-scrollbar-thumb{background:#d3dbe6;border-radius:8px}
+  .pathchip{
+    border:1.4px solid var(--border-2);background:#fff;
+    border-radius:999px;padding:7px 14px;
+    font-size:11.5px;font-weight:600;cursor:pointer;color:var(--ink-2);
+    font-family:inherit;transition:all .16s;
+  }
+  .pathchip:hover{border-color:var(--accent);color:var(--accent)}
+  .pathchip.active{
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    color:#fff;border-color:transparent;
+    box-shadow:0 5px 14px var(--accent-ring);
+  }
+
+  .seg{
+    display:inline-flex;background:var(--surface-3);
+    border-radius:13px;padding:4px;gap:3px;
+    border:1px solid var(--border);align-self:flex-start;
+  }
+  .seg button{
+    border:none;background:transparent;padding:9px 26px;border-radius:10px;
+    font-size:12.5px;font-weight:700;cursor:pointer;color:var(--ink-2);
+    font-family:inherit;transition:all .18s var(--ease);
+  }
+  .seg button:hover:not(.active){color:var(--accent)}
+  .seg button.active{
+    background:#fff;color:var(--accent);
+    box-shadow:0 3px 10px rgba(16,26,44,.10);
+  }
+
+  .actions{display:flex;gap:9px;justify-content:flex-end;margin-top:2px;flex-wrap:wrap}
+  .btn{
+    border:none;border-radius:12px;padding:11px 18px;
+    font-size:13px;font-weight:700;cursor:pointer;
+    background:var(--surface-3);color:var(--ink-2);
+    font-family:inherit;transition:all .18s var(--ease);
+  }
+  .btn:hover{filter:brightness(.97);transform:translateY(-1px)}
+  .btn:active{transform:translateY(0) scale(.98)}
+  .btn.primary{
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    color:#fff;box-shadow:0 6px 16px var(--accent-ring);
+  }
+  .btn.primary:hover{box-shadow:0 10px 24px rgba(91,91,214,.38)}
+  .btn.danger{background:var(--danger-soft);color:var(--danger)}
+  .btn.danger:hover{background:#fcdcdc}
+  .btn.ghost{background:transparent;border:1.5px solid var(--border-2);color:var(--ink-2)}
+  .btn.ghost:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+  .btn.tiny{padding:8px 12px;font-size:11.5px;border-radius:10px}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+
+  /* ───────── upload queue ───────── */
+  .uplist{display:flex;flex-direction:column;gap:10px;overflow:auto;padding-right:4px}
+  .uplist::-webkit-scrollbar{width:8px}
+  .uplist::-webkit-scrollbar-thumb{background:#d3dbe6;border-radius:8px}
+  .uprow{display:flex;align-items:center;gap:9px}
+  .uporig{
+    flex:none;width:32%;font-size:11.5px;color:var(--ink-3);font-weight:600;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .uprow input{
+    flex:1;min-width:0;border:1.6px solid var(--border);border-radius:11px;
+    padding:10px 12px;font-size:13px;font-family:inherit;outline:none;
+    background:var(--surface-2);color:var(--ink);transition:all .16s;
+  }
+  .uprow input:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 4px var(--accent-ring)}
+  .uprow input:disabled{background:var(--surface-3);color:var(--ink-3);font-style:italic}
+
+  /* ───────── file manager ───────── */
+  .mhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .mhead strong{font-size:17.5px;font-weight:800;letter-spacing:-.3px}
+  .mhead > div{display:flex;gap:6px}
+  .mtree{
+    flex:1;overflow:auto;background:var(--surface-2);
+    border-radius:15px;padding:8px;border:1px solid var(--border);
+    display:flex;flex-direction:column;gap:1px;min-height:120px;
+  }
+  .mtree::-webkit-scrollbar{width:9px}
+  .mtree::-webkit-scrollbar-thumb{background:#d3dbe6;border-radius:9px}
+  .frow{
+    display:flex;align-items:center;gap:8px;
+    padding:8px 10px;border-radius:11px;font-size:13px;
+    cursor:default;user-select:none;color:var(--ink);
+    transition:background .14s;
+  }
+  .frow:hover{background:#eef2fa}
+  .frow.sel{background:var(--accent-soft)}
+  .frow .ftog{
+    width:20px;height:20px;flex:none;border:none;background:transparent;
+    cursor:pointer;font-size:11px;color:var(--ink-2);
+    display:grid;place-items:center;font-family:inherit;
+  }
+  .frow .fico{flex:none;font-size:14px;line-height:1}
+  .frow .fname{
+    flex:1;min-width:0;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;font-weight:500;
+  }
+  .frow .factions{display:flex;gap:2px;flex:none;opacity:0;transition:opacity .16s}
+  .frow:hover .factions{opacity:1}
+  .frow .mini{
+    border:none;background:transparent;cursor:pointer;font-size:13px;
+    padding:5px 7px;border-radius:9px;color:var(--ink-2);
+    transition:all .14s;font-family:inherit;
+  }
+  .frow .mini:hover{background:var(--accent-soft);color:var(--accent)}
+  .fchk{
+    width:16px;height:16px;flex:none;
+    accent-color:var(--accent);cursor:pointer;
+  }
+  .mempty{
+    padding:28px;text-align:center;color:var(--ink-3);
+    font-size:13px;font-style:italic;
+  }
+  .mfoot{display:flex;flex-wrap:wrap;gap:8px}
+  .mfoot .btn{flex:1 1 auto;padding:11px 14px;font-size:12.5px}
+
+  /* ───────── menu ───────── */
+  .menu{
+    position:fixed;z-index:200;background:#fff;
+    border-radius:15px;padding:7px;
+    box-shadow:var(--shadow-lg);
+    border:1px solid var(--border);
+    display:flex;flex-direction:column;gap:2px;
+    min-width:258px;animation:pop .16s var(--ease);
+  }
+  .mi{
+    border:none;background:transparent;text-align:left;
+    padding:11px 14px;border-radius:11px;
+    font-size:13px;font-weight:600;cursor:pointer;
+    color:var(--ink);white-space:nowrap;font-family:inherit;
+    transition:all .14s;
+  }
+  .mi:hover{background:var(--accent-soft);color:var(--accent)}
+  .mi.danger{color:var(--danger)}
+  .mi.danger:hover{background:var(--danger-soft);color:var(--danger)}
+
+  /* ───────── toast ───────── */
+  #toasts{
+    position:fixed;left:50%;transform:translateX(-50%);
+    bottom:104px;z-index:300;
+    display:flex;flex-direction:column;gap:8px;align-items:center;
+    pointer-events:none;width:calc(100% - 40px);max-width:440px;
+  }
+  .toast{
+    background:rgba(20,29,43,.94);
+    color:#fff;padding:12px 18px;border-radius:14px;
+    font-size:12.5px;font-weight:600;
+    box-shadow:0 10px 28px rgba(16,26,44,.30);
+    animation:pop .2s var(--ease);
+    text-align:center;line-height:1.45;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    border:1px solid rgba(255,255,255,.12);
+  }
+
+  @media (max-width:640px){
+    .topbar{padding:10px 10px 6px;gap:8px}
+    .split{grid-template-columns:70px 1fr;padding:0 10px 10px;gap:9px}
+    .rail{padding:8px 6px;gap:7px}
+    .railbtn{width:54px;height:54px;font-size:8.5px;border-radius:13px}
+    .railbtn svg{width:18px;height:18px}
+    .icon-btn{width:40px;height:40px;border-radius:13px}
+    .actions-group .icon-btn{width:34px;height:34px}
+    .save-btn{padding:10px 16px;font-size:12px}
+    .save-btn svg{width:15px;height:15px}
+    .toggle button{padding:8px 18px;font-size:11px}
+    .toolrow{padding:2px 10px 10px;gap:8px}
+    .modal{padding:18px;border-radius:19px}
+    .modal.wide{max-width:100%}
+    .fab{width:54px;height:54px;right:16px;bottom:20px}
+    .fab svg{width:22px;height:22px}
+    textarea#code{font-size:12px;padding:14px}
+    .chip .dir{display:none}
+  }
+</style>
+</head>
+<body class="mode-code">
+
+  <!-- ── top bar ── -->
+  <header class="topbar">
+    <button class="icon-btn" id="btnHome" title="Home">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>
+    </button>
+    <div class="file-strip" id="strip"></div>
+    <div class="actions-group">
+      <button class="icon-btn" id="btnUndo" title="Undo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+      </button>
+      <button class="icon-btn" id="btnRedo" title="Redo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>
+      </button>
+      <button class="icon-btn" id="btnMenu" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── save + mode toggle ── -->
+  <div class="toolrow">
+    <button class="save-btn" id="btnSave" title="Save project to a folder">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      <span>Save</span>
+    </button>
+    <div class="toggle">
+      <button id="btnCode" class="active">Code</button>
+      <button id="btnPreview">Preview</button>
+    </div>
+  </div>
+
+  <!-- ── split ── -->
+  <main class="split">
+    <aside class="rail">
+      <button class="railbtn" id="btnNew" title="Create file or folder">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <span>New</span>
+      </button>
+      <button class="railbtn" id="btnOpenFolder" title="Open a folder from disk">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span>Open</span>
+      </button>
+      <button class="railbtn" id="btnExpand" title="Expand the full file list">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.1" fill="currentColor" stroke="none"/></svg>
+        <span>List</span>
+      </button>
+      <button class="railbtn" id="btnUpload" title="Upload files">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span>Upload</span>
+      </button>
+    </aside>
+
+    <section class="pane right">
+      <div class="pane-chrome">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+      <textarea id="code" spellcheck="false" placeholder="Write your code here..."></textarea>
+      <iframe id="preview" sandbox="allow-scripts allow-modals allow-forms allow-popups"></iframe>
+      <div class="placeholder" id="rightPlaceholder">
+        <div class="placeholder-inner">
+          <div class="glyph">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+          </div>
+          <p>Your project is empty</p>
+          <p class="sub">Create a file or upload one to get started.</p>
+          <button class="btn primary" id="phNew">Create a file</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <button class="fab" id="btnFab" title="Add">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+  <div id="toasts"></div>
+
+<!-- zip.js — real ZIP compression + native ZipCrypto / AES-256 password protection -->
+<script src="https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.7.45/dist/zip-full.min.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   MINI IDE — virtual file system + preview + export
+   Zipping:  @zip.js/zip.js  (real DEFLATE + native encryption)
+   Password: ZipCrypto  → opens in Windows Explorer / macOS Finder
+             AES-256    → opens in 7-Zip / WinRAR / Keka / etc.
+   Fallback: store-only ZIP writer if zip.js is unavailable
+             (plain ZIPs only — encryption requires zip.js)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── tiny helpers ─────────────────────────────────────────── */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+const parentOf = p => { const i = p.lastIndexOf('/'); return i < 0 ? '' : p.slice(0, i); };
+const nameOf   = p => { const i = p.lastIndexOf('/'); return i < 0 ? p : p.slice(i + 1); };
+const joinPath = (a, b) => (a ? a + '/' + b : b);
+
+const TEXT_EXT = new Set(['html','htm','css','js','mjs','cjs','json','txt','md','xml','svg',
+  'csv','tsv','yml','yaml','ts','tsx','jsx','c','h','cpp','hpp','py','java','rb','go','rs',
+  'php','sql','sh','bash','env','toml','ini','log','gitignore','vue','svelte','map']);
+
+const MIME = { html:'text/html', htm:'text/html', css:'text/css', js:'text/javascript',
+  mjs:'text/javascript', json:'application/json', txt:'text/plain', md:'text/markdown',
+  xml:'application/xml', svg:'image/svg+xml', png:'image/png', jpg:'image/jpeg',
+  jpeg:'image/jpeg', gif:'image/gif', webp:'image/webp', ico:'image/x-icon',
+  pdf:'application/pdf', woff:'font/woff', woff2:'font/woff2', ttf:'font/ttf',
+  mp3:'audio/mpeg', mp4:'video/mp4', csv:'text/csv', yml:'text/yaml', yaml:'text/yaml' };
+
+const extOf   = n => (n.includes('.') ? n.split('.').pop().toLowerCase() : '');
+const mimeFor = n => MIME[extOf(n)] || 'application/octet-stream';
+const isTextName = n => TEXT_EXT.has(extOf(n)) || !n.includes('.');
+
+/* pretty icon per file type */
+const IMG_EXT = ['png','jpg','jpeg','gif','webp','svg','ico','bmp','avif'];
+function chipIcon(p) {
+  const e = extOf(p);
+  if (e === 'html' || e === 'htm') return '🌐';
+  if (IMG_EXT.includes(e))         return '🖼️';
+  if (e === 'css')                 return '🎨';
+  if (e === 'json')                return '🧩';
+  if (['js','mjs','cjs','ts','jsx','tsx'].includes(e)) return '📜';
+  if (['md','txt'].includes(e))    return '📝';
+  return '📄';
+}
+
+/* ═══════════ STATE ═══════════ */
+const state = {
+  files: {},            // path -> { content:string, bin:boolean }
+  folders: new Set(),   // folder paths (no trailing slash, root = '')
+  active: null,
+  mode: 'code'
+};
+
+const LS_KEY = 'miniide.project.v3';
+
+/* ═══════════ PERSISTENCE ═══════════ */
+let saveTimer = null;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persist, 350);
+}
+function persist() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      files: state.files,
+      folders: Array.from(state.folders),
+      active: state.active
+    }));
+  } catch (e) { /* quota — ignore */ }
+}
+function restore() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    if (!d || !d.files) return false;
+    state.files = d.files || {};
+    state.folders = new Set(d.folders || []);
+    state.active = (d.active && state.files[d.active]) ? d.active : (Object.keys(state.files)[0] || null);
+    return true;
+  } catch (e) { return false; }
+}
+
+/* ═══════════ HISTORY (undo / redo) ═══════════ */
+let history = [], hIndex = -1, hTimer = null;
+
+function snap() {
+  return JSON.stringify({
+    files: state.files,
+    folders: Array.from(state.folders),
+    active: state.active
+  });
+}
+function seedHistory() {
+  history = [snap()];
+  hIndex = 0;
+  updateUndoRedo();
+}
+function commitHistory() {
+  clearTimeout(hTimer);
+  hTimer = setTimeout(() => {
+    const s = snap();
+    if (history[hIndex] === s) return;
+    history = history.slice(0, hIndex + 1);
+    history.push(s);
+    if (history.length > 60) history.shift();
+    hIndex = history.length - 1;
+    updateUndoRedo();
+  }, 420);
+}
+function applySnapshot(s) {
+  const d = JSON.parse(s);
+  state.files = d.files;
+  state.folders = new Set(d.folders);
+  state.active = d.active;
+  renderAll();
+  persist();
+}
+function undo() {
+  if (hIndex <= 0) return;
+  hIndex--;
+  applySnapshot(history[hIndex]);
+  updateUndoRedo();
+}
+function redo() {
+  if (hIndex >= history.length - 1) return;
+  hIndex++;
+  applySnapshot(history[hIndex]);
+  updateUndoRedo();
+}
+function updateUndoRedo() {
+  $('#btnUndo').disabled = hIndex <= 0;
+  $('#btnRedo').disabled = hIndex >= history.length - 1;
+}
+
+/* ═══════════ PATH HELPERS ═══════════ */
+function ensureFolders(p) {
+  let cur = parentOf(p);
+  while (cur) { state.folders.add(cur); cur = parentOf(cur); }
+}
+function sortPaths(a, b) {
+  const da = a.split('/').length, db = b.split('/').length;
+  return da - db || a.localeCompare(b);
+}
+function deletePath(p) {
+  const isFile = !!state.files[p];
+  if (isFile) delete state.files[p];
+  state.folders.delete(p);
+  const pre = p + '/';
+  for (const f of Object.keys(state.files)) if (f.startsWith(pre)) delete state.files[f];
+  for (const d of Array.from(state.folders)) if (d.startsWith(pre)) state.folders.delete(d);
+  if (!state.files[state.active]) state.active = Object.keys(state.files)[0] || null;
+}
+function renamePath(p, newName) {
+  newName = newName.trim().replace(/[/\\]/g, '');
+  if (!newName) throw new Error('Name cannot be empty');
+  const np = joinPath(parentOf(p), newName);
+  if (np === p) return;
+  if (state.files[np] || state.folders.has(np)) throw new Error('"' + newName + '" already exists');
+
+  if (state.files[p]) {
+    state.files[np] = state.files[p];
+    delete state.files[p];
+    if (state.active === p) state.active = np;
+  } else {
+    state.folders.delete(p);
+    state.folders.add(np);
+    const pre = p + '/';
+    for (const f of Object.keys(state.files)) {
+      if (f.startsWith(pre)) {
+        state.files[np + f.slice(p.length)] = state.files[f];
+        delete state.files[f];
+      }
+    }
+    for (const d of Array.from(state.folders)) {
+      if (d.startsWith(pre)) {
+        state.folders.delete(d);
+        state.folders.add(np + d.slice(p.length));
+      }
+    }
+    if (state.active && state.active.startsWith(pre)) {
+      state.active = np + state.active.slice(p.length);
+    }
+  }
+}
+
+/* ═══════════ BYTES / ENCODING ═══════════ */
+function contentBytes(f) {
+  if (f.bin) {
+    const b64 = f.content.split(',')[1] || '';
+    try {
+      const bin = atob(b64);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return arr;
+    } catch (e) { return new Uint8Array(0); }
+  }
+  return enc.encode(f.content);
+}
+function toDataURL(bytes, mime) {
+  let s = '';
+  const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH) {
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  }
+  return 'data:' + (mime || 'application/octet-stream') + ';base64,' + btoa(s);
+}
+function concatBytes(arrs) {
+  let total = 0;
+  for (const a of arrs) total += a.length;
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const a of arrs) { out.set(a, o); o += a.length; }
+  return out;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ZIP — zip.js powered
+   ═══════════════════════════════════════════════════════════ */
+const HAS_ZIPJS = () => !!(window.zip && window.zip.ZipWriter);
+
+/**
+ * Build a real ZIP archive.
+ *
+ * @param {Array<{name:string,data:Uint8Array}>} entries
+ * @param {{password?:string, method?:'zipcrypto'|'aes'}} [opts]
+ * @returns {Promise<Uint8Array>}
+ */
+async function buildZip(entries, opts) {
+  opts = opts || {};
+  const password = opts.password;
+  const method   = opts.method || 'zipcrypto';
+
+  if (HAS_ZIPJS()) {
+    const writerOpts = {};
+    if (password) {
+      writerOpts.password = password;
+      if (method === 'zipcrypto') {
+        writerOpts.zipCrypto = true;               // opens natively on Windows/macOS
+      } else {
+        writerOpts.zipCrypto = false;              // AES-256 (default strength = 3)
+        writerOpts.encryptionStrength = 3;
+      }
+    }
+    const blobWriter = new zip.BlobWriter('application/zip');
+    const zipWriter  = new zip.ZipWriter(blobWriter, writerOpts);
+
+    try {
+      for (const e of entries) {
+        if (e.name.endsWith('/')) {
+          // empty directory entry
+          await zipWriter.add(e.name, new zip.TextReader(''));
+        } else {
+          await zipWriter.add(e.name, new zip.Uint8ArrayReader(e.data));
+        }
+      }
+      await zipWriter.close();
+      const blob = await blobWriter.getData();
+      return new Uint8Array(await blob.arrayBuffer());
+    } catch (err) {
+      try { await zipWriter.close(); } catch (_) {}
+      throw err;
+    }
+  }
+
+  // ── offline fallback ──
+  if (password) {
+    throw new Error('Password protection needs the zip.js library — check your connection.');
+  }
+  return makeZipFallback(entries);
+}
+
+/**
+ * Read a ZIP archive (optionally password-protected).
+ * @param {Uint8Array} bytes
+ * @param {string|null} password
+ * @returns {Promise<Array<{name:string,data:Uint8Array}>>}
+ */
+async function readZip(bytes, password) {
+  if (HAS_ZIPJS()) {
+    let reader;
+    try {
+      reader = new zip.ZipReader(
+        new zip.Uint8ArrayReader(bytes),
+        password ? { password } : {}
+      );
+      const entries = await reader.getEntries();
+
+      // If any entry is encrypted and we have no password, bail out for a prompt.
+      if (!password && entries.some(e => e.encrypted)) {
+        await reader.close();
+        throw Object.assign(new Error('Password required'), { passwordNeeded: true });
+      }
+
+      const out = [];
+      for (const entry of entries) {
+        if (entry.directory) continue;
+        let data;
+        try {
+          data = await entry.getData(
+            new zip.Uint8ArrayWriter(),
+            password ? { password } : {}
+          );
+        } catch (err) {
+          await reader.close();
+          throw Object.assign(new Error('Password required'), { passwordNeeded: true });
+        }
+        out.push({ name: entry.filename, data });
+      }
+      await reader.close();
+      return out;
+    } catch (err) {
+      if (reader) { try { await reader.close(); } catch (_) {} }
+      if (err && (err.passwordNeeded || /password/i.test(err.message || ''))) {
+        throw Object.assign(new Error('Password required'), { passwordNeeded: true });
+      }
+      throw err;
+    }
+  }
+  return readZipFallback(bytes);
+}
+
+/* ── offline fallback: stored (uncompressed) ZIP writer ────── */
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(buf) {
+  let crc = -1;
+  for (let i = 0; i < buf.length; i++) {
+    crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ buf[i]) & 0xFF];
+  }
+  return (crc ^ -1) >>> 0;
+}
+function makeZipFallback(entries) {
+  const parts = [], central = [];
+  let offset = 0;
+  const now = new Date();
+  const dTime = ((now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)) & 0xFFFF;
+  const dDate = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xFFFF;
+
+  for (const e of entries) {
+    const nameBytes = enc.encode(e.name);
+    const data = e.data || new Uint8Array(0);
+    const crc = crc32(data);
+    const size = data.length;
+
+    const lh = new Uint8Array(30 + nameBytes.length);
+    const lv = new DataView(lh.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(6, 0, true);
+    lv.setUint16(8, 0, true);            // stored
+    lv.setUint16(10, dTime, true);
+    lv.setUint16(12, dDate, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, size, true);
+    lv.setUint32(22, size, true);
+    lv.setUint16(26, nameBytes.length, true);
+    lv.setUint16(28, 0, true);
+    lh.set(nameBytes, 30);
+
+    parts.push(lh, data);
+
+    const ch = new Uint8Array(46 + nameBytes.length);
+    const cv = new DataView(ch.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, dTime, true);
+    cv.setUint16(14, dDate, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, size, true);
+    cv.setUint32(24, size, true);
+    cv.setUint16(28, nameBytes.length, true);
+    cv.setUint16(30, 0, true);
+    cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true);
+    cv.setUint16(36, 0, true);
+    cv.setUint32(38, 0, true);
+    cv.setUint32(42, offset, true);
+    ch.set(nameBytes, 46);
+    central.push(ch);
+
+    offset += lh.length + size;
+  }
+
+  const cdSize = central.reduce((a, b) => a + b.length, 0);
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, central.length, true);
+  ev.setUint16(10, central.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, offset, true);
+  ev.setUint16(20, 0, true);
+
+  return concatBytes([...parts, ...central, eocd]);
+}
+
+/* ── offline fallback: plain (unencrypted) ZIP reader ──────── */
+async function readZipFallback(bytes) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = -1;
+  const min = Math.max(0, bytes.length - 22 - 65535);
+  for (let i = bytes.length - 22; i >= min; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('Not a valid ZIP file');
+
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const raw = [];
+
+  for (let i = 0; i < count; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const flags  = dv.getUint16(p + 8, true);
+    const method = dv.getUint16(p + 10, true);
+    const csize  = dv.getUint32(p + 20, true);
+    const nlen   = dv.getUint16(p + 28, true);
+    const elen   = dv.getUint16(p + 30, true);
+    const clen   = dv.getUint16(p + 32, true);
+    const lho    = dv.getUint32(p + 42, true);
+    const name   = dec.decode(bytes.subarray(p + 46, p + 46 + nlen));
+
+    if (flags & 0x1) {
+      throw Object.assign(new Error('Password required'), { passwordNeeded: true });
+    }
+
+    const lnlen = dv.getUint16(lho + 26, true);
+    const lelen = dv.getUint16(lho + 28, true);
+    const start = lho + 30 + lnlen + lelen;
+    raw.push({ name, method, data: bytes.subarray(start, start + csize) });
+    p += 46 + nlen + elen + clen;
+  }
+
+  const out = [];
+  for (const e of raw) {
+    if (e.name.endsWith('/')) continue;
+    let data;
+    if (e.method === 0) data = e.data;
+    else if (e.method === 8) {
+      const ds = new DecompressionStream('deflate-raw');
+      const stream = new Blob([e.data]).stream().pipeThrough(ds);
+      data = new Uint8Array(await new Response(stream).arrayBuffer());
+    } else {
+      throw new Error('Unsupported ZIP compression method ' + e.method);
+    }
+    out.push({ name: e.name, data });
+  }
+  return out;
+}
+
+/* ═══════════ LEGACY .zip.enc (MIDE1 container) ═══════════
+   Kept ONLY so old archives can still be imported.
+   New archives are real ZIPs with real ZIP encryption.        */
+const MAGIC = 'MIDE1';
+async function deriveKey(password, salt) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+}
+async function decryptBytes(data, password) {
+  if (dec.decode(data.subarray(0, 5)) !== MAGIC) throw new Error('Not a legacy encrypted archive');
+  const salt = data.subarray(5, 21);
+  const iv   = data.subarray(21, 33);
+  const ct   = data.subarray(33);
+  const key  = await deriveKey(password, salt);
+  return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct));
+}
+const cryptoOK = () => !!(window.crypto && crypto.subtle);
+
+/* ═══════════ DOM REFS ═══════════ */
+const codeEl      = $('#code');
+const preview     = $('#preview');
+const stripEl     = $('#strip');
+const placeholder = $('#rightPlaceholder');
+
+/* ═══════════ RENDER ═══════════ */
+function renderAll() {
+  const hasFiles = Object.keys(state.files).length > 0;
+  document.body.classList.toggle('empty', !hasFiles);
+  renderStrip();
+  renderEditor();
+  if (state.mode === 'preview') buildPreview();
+}
+function renderStrip() {
+  stripEl.innerHTML = '';
+  const paths = Object.keys(state.files).sort(sortPaths);
+  if (!paths.length) {
+    stripEl.innerHTML = '<span class="empty">No files yet — press ＋ to create one</span>';
+    return;
+  }
+  for (const p of paths) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (p === state.active ? ' active' : '');
+    const dir = parentOf(p);
+    b.innerHTML =
+      '<span class="ico">' + chipIcon(p) + '</span>' +
+      '<span class="nm">' + esc(nameOf(p)) + '</span>' +
+      (dir ? '<span class="dir">' + esc(dir) + '</span>' : '');
+    b.title = p;
+    b.onclick = () => openFile(p);
+    stripEl.appendChild(b);
+  }
+  const act = stripEl.querySelector('.chip.active');
+  if (act && act.scrollIntoView) act.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
+function renderEditor() {
+  const f = state.files[state.active];
+  if (!f) {
+    codeEl.value = '';
+    codeEl.disabled = true;
+    codeEl.placeholder = Object.keys(state.files).length
+      ? 'Select a file above to start editing…'
+      : 'No files yet — press ＋ to create one';
+    return;
+  }
+  codeEl.disabled = !!f.bin;
+  codeEl.value = f.bin ? '⟨binary file — ' + nameOf(state.active) + '⟩' : f.content;
+}
+function openFile(p) {
+  if (!state.files[p]) return;
+  state.active = p;
+  renderAll();
+  persist();
+}
+
+/* ═══════════ PREVIEW BUILDER ═══════════ */
+function resolvePath(base, rel) {
+  if (/^(https?:|data:|blob:|mailto:|#|\/\/)/i.test(rel)) return null;
+  const parts = (rel.startsWith('/') ? rel.slice(1) : (base ? base + '/' + rel : rel)).split('/');
+  const out = [];
+  for (const seg of parts) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') out.pop();
+    else out.push(seg);
+  }
+  return out.join('/');
+}
+function pickHtmlEntry() {
+  if (state.active && /\.html?$/i.test(state.active)) return state.active;
+  if (state.files['index.html']) return 'index.html';
+  return Object.keys(state.files).find(f => /\.html?$/i.test(f)) || null;
+}
+function buildPreview() {
+  const path = pickHtmlEntry();
+  if (!path) {
+    preview.srcdoc =
+      '<!doctype html><body style="font-family:system-ui;padding:40px;text-align:center;color:#8b97a9">' +
+      'No HTML file to preview yet.</body>';
+    return;
+  }
+  const base = parentOf(path);
+  let html = state.files[path].content;
+
+  // inline <link rel=stylesheet>
+  html = html.replace(/<link\b[^>]*>/gi, tag => {
+    const rel = (tag.match(/\brel\s*=\s*["']([^"']*)["']/i) || [])[1] || '';
+    if (!/stylesheet/i.test(rel)) return tag;
+    const href = (tag.match(/\bhref\s*=\s*["']([^"']*)["']/i) || [])[1];
+    if (!href) return tag;
+    const p = resolvePath(base, href);
+    const f = p && state.files[p];
+    if (!f || f.bin) return tag;
+    return '<style data-inlined="' + esc(href) + '">\n' + f.content + '\n</style>';
+  });
+
+  // inline <script src>
+  html = html.replace(
+    /<script\b([^>]*?)\bsrc\s*=\s*["']([^"']+)["']([^>]*?)>\s*<\/script>/gi,
+    (m, a, src, b) => {
+      const p = resolvePath(base, src);
+      const f = p && state.files[p];
+      if (!f || f.bin) return m;
+      return '<script data-inlined="' + esc(src) + '">\n' + f.content + '\n<\/script>';
+    });
+
+  // inline binary assets (images etc.) as data URLs
+  html = html.replace(/\bsrc\s*=\s*["']([^"']+)["']/gi, (m, src) => {
+    if (/^(https?:|data:|blob:|\/\/)/i.test(src)) return m;
+    const p = resolvePath(base, src);
+    const f = p && state.files[p];
+    if (!f || !f.bin) return m;
+    return 'src="' + f.content + '"';
+  });
+
+  preview.srcdoc = html;
+}
+
+/* ═══════════ MODE ═══════════ */
+function setMode(mode) {
+  state.mode = mode;
+  document.body.classList.toggle('mode-code', mode === 'code');
+  document.body.classList.toggle('mode-preview', mode === 'preview');
+  $('#btnCode').classList.toggle('active', mode === 'code');
+  $('#btnPreview').classList.toggle('active', mode === 'preview');
+  if (mode === 'preview') buildPreview();
+}
+
+/* ═══════════ TOASTS ═══════════ */
+function toast(msg, ms) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  $('#toasts').appendChild(t);
+  setTimeout(() => {
+    t.style.transition = 'opacity .25s';
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 260);
+  }, ms || 2400);
+}
+
+/* ═══════════ MODALS ═══════════ */
+function modal(inner, cls) {
+  const back = document.createElement('div');
+  back.className = 'modal-backdrop';
+  back.innerHTML = '<div class="modal ' + (cls || '') + '">' + inner + '</div>';
+  document.body.appendChild(back);
+  const box = back.firstElementChild;
+  const close = () => back.remove();
+  back.addEventListener('mousedown', e => { if (e.target === back) close(); });
+  return { back, box, close };
+}
+function confirmDialog(message, okText, cancelText) {
+  return new Promise(resolve => {
+    const { box, close } = modal(
+      '<h3>Are you sure?</h3>' +
+      '<p class="hint">' + esc(message) + '</p>' +
+      '<div class="actions">' +
+        '<button class="btn ghost" data-act="c">' + esc(cancelText || 'Cancel') + '</button>' +
+        '<button class="btn primary" data-act="o">' + esc(okText || 'OK') + '</button>' +
+      '</div>');
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      close(); resolve(b.dataset.act === 'o');
+    };
+  });
+}
+function choiceDialog(title, message, options) {
+  return new Promise(resolve => {
+    const btns = options.map((o, i) =>
+      '<button class="btn ' + (o.primary ? 'primary' : 'ghost') + '" data-i="' + i + '">' +
+      esc(o.label) + '</button>').join('');
+    const { box, close } = modal(
+      '<h3>' + esc(title) + '</h3>' +
+      (message ? '<p class="hint">' + esc(message) + '</p>' : '') +
+      '<div class="actions" style="flex-wrap:wrap">' + btns + '</div>');
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      close(); resolve(options[+b.dataset.i].value);
+    };
+  });
+}
+function passwordDialog(title, subtitle) {
+  return new Promise(resolve => {
+    const { box, close } = modal(
+      '<h3>' + esc(title) + '</h3>' +
+      (subtitle ? '<p class="hint">' + esc(subtitle) + '</p>' : '') +
+      '<label class="fld"><span>Password</span>' +
+      '<input type="password" id="pw" placeholder="••••••••" autocomplete="off"></label>' +
+      '<div class="actions">' +
+        '<button class="btn ghost" data-act="c">Cancel</button>' +
+        '<button class="btn primary" data-act="o">Continue</button>' +
+      '</div>');
+    const inp = box.querySelector('#pw');
+    setTimeout(() => inp.focus(), 60);
+    const done = v => { close(); resolve(v); };
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      done(b.dataset.act === 'o' ? inp.value : null);
+    };
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') done(inp.value);
+    });
+  });
+}
+
+/**
+ * Password + encryption-method dialog for protected ZIP downloads.
+ * Returns { password, method } or null.
+ */
+function encryptedZipDialog() {
+  return new Promise(resolve => {
+    const { box, close } = modal(
+      '<h3>Password-protect archive</h3>' +
+      '<p class="hint">This produces a real, standard <b>.zip</b> file — no custom container. Pick how it should be encrypted.</p>' +
+      '<label class="fld"><span>Password</span>' +
+        '<input type="password" id="zpw" placeholder="Enter a password" autocomplete="new-password"></label>' +
+      '<div class="fld"><span>Encryption method</span>' +
+        '<div class="seg" id="zseg" style="width:100%;align-self:stretch">' +
+          '<button type="button" data-m="zipcrypto" class="active" style="flex:1">Standard</button>' +
+          '<button type="button" data-m="aes" style="flex:1">AES-256</button>' +
+        '</div></div>' +
+      '<p class="hint" id="zhint"></p>' +
+      '<div class="actions">' +
+        '<button class="btn ghost" data-act="c">Cancel</button>' +
+        '<button class="btn primary" data-act="o">Download ZIP</button>' +
+      '</div>');
+
+    let method = 'zipcrypto';
+    const hintEl = box.querySelector('#zhint');
+    const updateHint = () => {
+      hintEl.innerHTML = method === 'zipcrypto'
+        ? '🟢 <b>Standard (ZipCrypto)</b> — opens natively in Windows Explorer, macOS Finder and every ZIP tool. Weaker against brute-force attacks.'
+        : '🔐 <b>AES-256</b> — strong encryption, but Windows Explorer and macOS Finder cannot open it. Use 7-Zip, WinRAR, Keka or another AES-aware tool.';
+    };
+    updateHint();
+
+    box.querySelector('#zseg').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      Array.from(b.parentNode.children).forEach(c => c.classList.remove('active'));
+      b.classList.add('active');
+      method = b.dataset.m;
+      updateHint();
+    };
+
+    const pwInp = box.querySelector('#zpw');
+    setTimeout(() => pwInp.focus(), 60);
+
+    const done = v => { close(); resolve(v); };
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.act === 'c') return done(null);
+      const pw = pwInp.value;
+      if (!pw) { pwInp.focus(); toast('Enter a password'); return; }
+      done({ password: pw, method });
+    };
+    pwInp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const pw = pwInp.value;
+        if (pw) done({ password: pw, method });
+      }
+    });
+  });
+}
+
+/* ═══════════ MENUS ═══════════ */
+let openMenuEl = null, menuDocHandler = null;
+function closeMenus() {
+  if (openMenuEl) { openMenuEl.remove(); openMenuEl = null; }
+  if (menuDocHandler) {
+    document.removeEventListener('pointerdown', menuDocHandler, true);
+    menuDocHandler = null;
+  }
+}
+function showMenu(anchor, items) {
+  closeMenus();
+  const m = document.createElement('div');
+  m.className = 'menu';
+  m.innerHTML = items.map((it, i) =>
+    '<button class="mi' + (it.danger ? ' danger' : '') + '" data-i="' + i + '">' +
+    esc(it.label) + '</button>').join('');
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect();
+  const top = Math.min(r.bottom + 8, window.innerHeight - m.offsetHeight - 12);
+  m.style.top = Math.max(8, top) + 'px';
+  m.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+  openMenuEl = m;
+  m.onclick = e => {
+    const b = e.target.closest('.mi'); if (!b) return;
+    const it = items[+b.dataset.i];
+    closeMenus();
+    if (it.onClick) it.onClick();
+  };
+  menuDocHandler = e => { if (openMenuEl && !openMenuEl.contains(e.target)) closeMenus(); };
+  setTimeout(() => document.addEventListener('pointerdown', menuDocHandler, true), 0);
+}
+
+/* ═══════════ CREATE DIALOG ═══════════ */
+function createDialog(defaultFolder) {
+  return new Promise(resolve => {
+    const { box, close } = modal(
+      '<h3>Create new</h3>' +
+      '<div class="seg" id="typeSeg">' +
+        '<button type="button" data-t="file" class="active">File</button>' +
+        '<button type="button" data-t="folder">Folder</button>' +
+      '</div>' +
+      '<label class="fld"><span>Name</span>' +
+        '<input id="newName" placeholder="my-file.txt" autocomplete="off" spellcheck="false"></label>' +
+      '<div class="fld"><span>Location — tap a path</span>' +
+        '<div class="paths" id="pathList"></div></div>' +
+      '<div class="actions">' +
+        '<button class="btn ghost" data-act="c">Cancel</button>' +
+        '<button class="btn primary" data-act="o">Create</button>' +
+      '</div>');
+
+    let type = 'file';
+    let loc = defaultFolder || '';
+
+    const folders = ['', ...Array.from(state.folders).sort(sortPaths)];
+    const list = box.querySelector('#pathList');
+    list.innerHTML = folders.map(p =>
+      '<button type="button" class="pathchip' + (p === loc ? ' active' : '') + '" data-p="' + esc(p) + '">' +
+      (p === '' ? '/ (root)' : esc(p)) + '</button>').join('');
+    list.onclick = e => {
+      const b = e.target.closest('.pathchip'); if (!b) return;
+      Array.from(list.children).forEach(c => c.classList.remove('active'));
+      b.classList.add('active');
+      loc = b.dataset.p;
+    };
+
+    box.querySelector('#typeSeg').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      Array.from(b.parentNode.children).forEach(c => c.classList.remove('active'));
+      b.classList.add('active');
+      type = b.dataset.t;
+      box.querySelector('#newName').placeholder = type === 'folder' ? 'my-folder' : 'my-file.txt';
+    };
+
+    const inp = box.querySelector('#newName');
+    setTimeout(() => inp.focus(), 60);
+
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.act === 'c') { close(); return resolve(null); }
+      const name = inp.value.trim().replace(/[/\\]/g, '');
+      if (!name) { inp.focus(); return; }
+      const full = joinPath(loc, name);
+      if (state.files[full] || state.folders.has(full)) {
+        toast('"' + name + '" already exists there');
+        return;
+      }
+      close();
+      resolve({ type, path: full });
+    };
+  });
+}
+
+/* ═══════════ RENAME QUEUE (uploads ≤ 3) ═══════════ */
+function renameQueueDialog(list) {
+  return new Promise(resolve => {
+    const rows = list.map((f, i) =>
+      '<div class="uprow">' +
+        '<div class="uporig" title="' + esc(f.name) + '">' + esc(f.name) + '</div>' +
+        '<input data-i="' + i + '" value="' + esc(f.name) + '" spellcheck="false">' +
+        '<button type="button" class="btn tiny ghost" data-skip="' + i + '">Skip</button>' +
+      '</div>').join('');
+
+    const { box, close } = modal(
+      '<h3>Upload ' + list.length + ' file' + (list.length > 1 ? 's' : '') + '</h3>' +
+      '<p class="hint">Rename any of them, or press <b>Skip</b> to keep the original name.</p>' +
+      '<div class="uplist">' + rows + '</div>' +
+      '<div class="actions">' +
+        '<button class="btn ghost" data-act="c">Cancel</button>' +
+        '<button class="btn primary" data-act="o">Upload</button>' +
+      '</div>');
+
+    box.querySelector('.uplist').onclick = e => {
+      const b = e.target.closest('[data-skip]'); if (!b) return;
+      const i = b.dataset.skip;
+      const inp = box.querySelector('input[data-i="' + i + '"]');
+      if (inp.disabled) {
+        inp.disabled = false;
+        inp.value = inp.dataset.orig || list[+i].name;
+        b.textContent = 'Skip';
+      } else {
+        inp.dataset.orig = list[+i].name;
+        inp.value = list[+i].name;
+        inp.disabled = true;
+        b.textContent = 'Skipped';
+      }
+    };
+
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.act === 'c') { close(); return resolve(null); }
+      const names = list.map((f, i) => {
+        const inp = box.querySelector('input[data-i="' + i + '"]');
+        return (inp.disabled ? f.name : inp.value.trim().replace(/[/\\]/g, '')) || f.name;
+      });
+      const seen = new Set();
+      for (const n of names) {
+        if (seen.has(n)) { toast('Duplicate name: ' + n); return; }
+        seen.add(n);
+      }
+      close();
+      resolve(names);
+    };
+  });
+}
+
+/* ═══════════ UPLOAD ═══════════ */
+function pickFiles(dest) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.multiple = true;
+  inp.style.display = 'none';
+  inp.onchange = async () => {
+    const list = Array.from(inp.files || []);
+    inp.remove();
+    if (!list.length) return;
+    await handleUploads(list, dest || '');
+  };
+  document.body.appendChild(inp);
+  inp.click();
+}
+async function handleUploads(list, dest) {
+  let names;
+  if (list.length <= 3) {
+    names = await renameQueueDialog(list);
+    if (!names) return;
+  } else {
+    names = list.map(f => f.name);
+  }
+
+  let added = 0;
+  for (let i = 0; i < list.length; i++) {
+    const file = list[i];
+    const path = joinPath(dest, names[i]);
+    if (state.files[path] || state.folders.has(path)) {
+      toast('Skipped duplicate: ' + names[i]);
+      continue;
+    }
+    const bin = !isTextName(names[i]) ||
+                /^(image|audio|video|font|application\/pdf)\//.test(file.type || '');
+    let content;
+    if (bin) {
+      content = toDataURL(new Uint8Array(await file.arrayBuffer()), file.type || mimeFor(names[i]));
+    } else {
+      content = await file.text();
+    }
+    state.files[path] = { content, bin };
+    ensureFolders(path);
+    added++;
+  }
+
+  if (added) {
+    if (!state.active) state.active = Object.keys(state.files).sort(sortPaths)[0];
+    renderAll();
+    persist();
+    commitHistory();
+    toast('Uploaded ' + added + ' file' + (added > 1 ? 's' : ''));
+  }
+}
+
+/* ═══════════ DOWNLOADS / ZIP ═══════════ */
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+function gatherPaths(paths) {
+  const set = new Set();
+  for (const p of paths) {
+    if (state.files[p]) { set.add(p); continue; }
+    if (state.folders.has(p)) set.add(p);
+    const pre = p + '/';
+    for (const f of Object.keys(state.files)) if (f.startsWith(pre)) set.add(f);
+    for (const d of state.folders) if (d.startsWith(pre)) set.add(d);
+  }
+  return set;
+}
+
+/* Collect the project (or a selection) into zip entries. */
+function collectEntries(paths) {
+  const roots = (paths && paths.length)
+    ? paths
+    : [...Object.keys(state.files), ...state.folders];
+  const set = gatherPaths(roots);
+  const entries = [];
+  for (const p of set) {
+    if (state.folders.has(p)) entries.push({ name: p + '/', data: new Uint8Array(0) });
+    else if (state.files[p]) entries.push({ name: p, data: contentBytes(state.files[p]) });
+  }
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  return entries;
+}
+
+/**
+ * Download the project as a real ZIP.
+ *   encrypt = false → plain DEFLATE .zip (opens anywhere)
+ *   encrypt = true  → password-protected .zip (ZipCrypto or AES-256)
+ *
+ * Both flavours are standard ZIPs — no custom container format.
+ */
+async function downloadZip(paths, encrypt) {
+  const entries = collectEntries(paths);
+  if (!entries.length) { toast('Nothing to download'); return; }
+
+  let password = null, method = 'zipcrypto';
+
+  if (encrypt) {
+    if (!HAS_ZIPJS()) {
+      toast('Password protection needs the zip.js library — check your connection.');
+      return;
+    }
+    const opts = await encryptedZipDialog();
+    if (!opts) return;
+    password = opts.password;
+    method   = opts.method;
+  }
+
+  let bytes;
+  try {
+    bytes = await buildZip(entries, password ? { password, method } : {});
+  } catch (e) {
+    toast('Could not build the ZIP: ' + (e.message || e));
+    return;
+  }
+
+  const fname = 'project.zip';
+  downloadBlob(new Blob([bytes], { type: 'application/zip' }), fname);
+
+  if (password) {
+    toast('Downloaded ' + fname + ' — protected with ' +
+          (method === 'zipcrypto' ? 'standard ZIP encryption' : 'AES-256') + '.', 3200);
+  } else {
+    toast('Downloaded ' + fname);
+  }
+}
+
+async function downloadSingle(path) {
+  const f = state.files[path];
+  if (!f) return;
+  downloadBlob(new Blob([contentBytes(f)], { type: mimeFor(path) }), nameOf(path));
+}
+
+/* ═══════════ IMPORT ═══════════ */
+function importEntries(entries) {
+  let n = 0;
+  for (const e of entries) {
+    const path = e.name.replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!path) continue;
+    const bin = !isTextName(path);
+    const content = bin
+      ? toDataURL(e.data, mimeFor(path))
+      : dec.decode(e.data);
+    state.files[path] = { content, bin };
+    ensureFolders(path);
+    n++;
+  }
+  if (!state.active || !state.files[state.active]) {
+    state.active = Object.keys(state.files).sort(sortPaths)[0] || null;
+  }
+  renderAll(); persist(); commitHistory();
+  return n;
+}
+
+function pickImport() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '*';
+  inp.style.display = 'none';
+  inp.onchange = async () => {
+    const file = (inp.files || [])[0];
+    inp.remove();
+    if (!file) return;
+
+    try {
+      let bytes = new Uint8Array(await file.arrayBuffer());
+
+      // ── Legacy .zip.enc (MIDE1 container) — decrypt to a plain zip in memory ──
+      if (bytes.length >= 5 && dec.decode(bytes.subarray(0, 5)) === MAGIC) {
+        if (!cryptoOK()) { toast('Decryption is not available here'); return; }
+        const pw = await passwordDialog('Enter the archive password',
+          'This is a legacy Mini IDE encrypted archive.');
+        if (!pw) return;
+        try {
+          bytes = await decryptBytes(bytes, pw);
+        } catch (e) {
+          toast('Wrong password or corrupted archive');
+          return;
+        }
+      }
+
+      // ── First read attempt (no password) ──
+      let entries = null;
+      try {
+        entries = await readZip(bytes, null);
+      } catch (e) {
+        if (!e.passwordNeeded) throw e;
+
+        // ── Password-protected ZIP → prompt, retry up to 3 times ──
+        for (let tries = 0; tries < 3 && !entries; tries++) {
+          const pw = await passwordDialog(
+            'This archive is password-protected',
+            tries === 0 ? 'Enter the password to import its contents.'
+                        : 'Wrong password — try again.');
+          if (!pw) return;
+          try {
+            entries = await readZip(bytes, pw);
+          } catch (err) {
+            if (err.passwordNeeded || /password/i.test(err.message || '')) continue;
+            throw err;
+          }
+        }
+        if (!entries) { toast('Could not open the archive'); return; }
+      }
+
+      const n = importEntries(entries);
+      toast('Imported ' + n + ' file' + (n === 1 ? '' : 's'));
+
+    } catch (e) {
+      toast('Import failed: ' + (e.message || e));
+    }
+  };
+  document.body.appendChild(inp);
+  inp.click();
+}
+
+/* ═══════════ FILE SYSTEM ACCESS — SAVE ═══════════ */
+async function saveToFolder() {
+  if (!Object.keys(state.files).length && !state.folders.size) {
+    toast('Nothing to save — the project is empty');
+    return;
+  }
+  if (!('showDirectoryPicker' in window)) {
+    const go = await confirmDialog(
+      'This browser cannot write into folders. Download a ZIP of the project instead?',
+      'Download ZIP', 'Cancel');
+    if (go) downloadZip(null, false);
+    return;
+  }
+  let dir;
+  try {
+    dir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'miniide' });
+  } catch (e) {
+    if (e.name !== 'AbortError') toast('Folder selection cancelled');
+    return;
+  }
+  try {
+    if (dir.queryPermission) {
+      let perm = await dir.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') perm = await dir.requestPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') { toast('Write permission denied'); return; }
+    }
+    const removed = await syncDirectory(dir);
+    toast('Saved to “' + dir.name + '”' + (removed ? ' · removed ' + removed + ' extra item(s)' : ''));
+  } catch (e) {
+    if (e && e.message === '__cancelled') return;
+    toast('Save failed: ' + (e.message || e));
+  }
+}
+async function syncDirectory(dirHandle) {
+  let removed = 0;
+
+  const extra = [];
+  const wantedFiles = new Set(), wantedDirs = new Set();
+  for (const f of Object.keys(state.files)) if (parentOf(f) === '') wantedFiles.add(nameOf(f));
+  for (const d of state.folders) if (parentOf(d) === '') wantedDirs.add(nameOf(d));
+
+  for await (const [name, handle] of dirHandle.entries()) {
+    if (handle.kind === 'file' && !wantedFiles.has(name)) extra.push([name, false]);
+    if (handle.kind === 'directory' && !wantedDirs.has(name)) extra.push([name, true]);
+  }
+
+  if (extra.length) {
+    const preview = extra.slice(0, 5).map(x => '• ' + x[0]).join('\n');
+    const more = extra.length > 5 ? '\n…and ' + (extra.length - 5) + ' more' : '';
+    const ok = await confirmDialog(
+      'The selected folder contains ' + extra.length + ' item(s) that are not part of this project:\n\n' +
+      preview + more + '\n\nThey will be permanently deleted.',
+      'Delete & Save', 'Cancel');
+    if (!ok) throw new Error('__cancelled');
+    for (const [name, isDir] of extra) {
+      await dirHandle.removeEntry(name, { recursive: isDir });
+      removed++;
+    }
+  }
+
+  await writeInto(dirHandle, '');
+  return removed;
+}
+async function writeInto(dirHandle, prefix) {
+  for (const f of Object.keys(state.files)) {
+    if (parentOf(f) !== prefix) continue;
+    const fh = await dirHandle.getFileHandle(nameOf(f), { create: true });
+    const w = await fh.createWritable();
+    await w.write(contentBytes(state.files[f]));
+    await w.close();
+  }
+  for (const d of state.folders) {
+    if (parentOf(d) !== prefix) continue;
+    const dh = await dirHandle.getDirectoryHandle(nameOf(d), { create: true });
+    await writeInto(dh, d);
+  }
+}
+
+/* ═══════════ FILE SYSTEM ACCESS — OPEN ═══════════ */
+async function openFolder() {
+  if (!('showDirectoryPicker' in window)) {
+    toast('Opening folders needs Chrome / Edge. Use “Import .zip” instead.');
+    return;
+  }
+  let dir;
+  try {
+    dir = await window.showDirectoryPicker({ id: 'miniide-open' });
+  } catch (e) { return; }
+
+  const files = [], folders = [];
+  try {
+    await readDirRecursive(dir, '', files, folders);
+  } catch (e) {
+    toast('Could not read folder: ' + (e.message || e));
+    return;
+  }
+  if (!files.length && !folders.length) { toast('That folder is empty'); return; }
+
+  const mode = await choiceDialog(
+    'Load “' + dir.name + '”',
+    files.length + ' file(s) found. Replace the current project, or merge the folder into it?',
+    [
+      { label: 'Merge', value: 'merge', primary: true },
+      { label: 'Replace', value: 'replace' },
+      { label: 'Cancel', value: null }
+    ]);
+  if (!mode) return;
+
+  if (mode === 'replace') {
+    state.files = {};
+    state.folders = new Set();
+  }
+  folders.forEach(d => state.folders.add(d));
+  for (const f of files) {
+    const bin = !isTextName(f.path);
+    state.files[f.path] = {
+      content: bin ? toDataURL(f.buf, f.mime || mimeFor(f.path)) : dec.decode(f.buf),
+      bin
+    };
+    ensureFolders(f.path);
+  }
+  if (!state.active || !state.files[state.active]) {
+    state.active = state.files['index.html'] ? 'index.html'
+      : Object.keys(state.files).sort(sortPaths)[0] || null;
+  }
+  renderAll(); persist(); commitHistory();
+  toast('Loaded ' + files.length + ' file(s) from “' + dir.name + '”');
+}
+async function readDirRecursive(dirHandle, prefix, files, folders) {
+  for await (const [name, handle] of dirHandle.entries()) {
+    const path = prefix ? prefix + '/' + name : name;
+    if (handle.kind === 'directory') {
+      folders.push(path);
+      await readDirRecursive(handle, path, files, folders);
+    } else {
+      const file = await handle.getFile();
+      const buf = new Uint8Array(await file.arrayBuffer());
+      files.push({ path, buf, mime: file.type });
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   OCTOFLOW EXPORT
+   ───────────────────────────────────────────────────────────
+   Stages the whole Mini IDE project into OctoFlow's IndexedDB
+   so it can be pasted there as a brand-new GitHub repository.
+
+     DB   'OctoFlowDB' @ v4
+       ├ 'appState'  → { id:'state', tokens, location, clipboard }
+       └ 'staging'   → { id, createdAt, meta, files[] }
+
+   Mini IDE writes ONLY the record it owns and merges its
+   clipboard field into whatever appState already holds — it
+   never touches tokens or location.
+
+   OctoFlow discards the snapshot on exactly three events:
+     1. a paste completes successfully
+     2. the user clicks ✕ on the clipboard badge
+     3. the browser's site data is cleared
+   ═══════════════════════════════════════════════════════════ */
+
+const OCTO_DB      = 'OctoFlowDB';
+const OCTO_VERSION = 4;
+const OCTO_STATE   = 'appState';
+const OCTO_STAGING = 'staging';
+
+function openOctoDB() {
+  return new Promise((resolve, reject) => {
+    let req;
+    try { req = indexedDB.open(OCTO_DB, OCTO_VERSION); }
+    catch (e) { return reject(e); }
+
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(OCTO_STATE))
+        d.createObjectStore(OCTO_STATE, { keyPath: 'id' });
+      if (!d.objectStoreNames.contains(OCTO_STAGING))
+        d.createObjectStore(OCTO_STAGING, { keyPath: 'id' });
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = e => reject(e.target.error);
+    req.onblocked = () => reject(new Error(
+      'OctoFlow database is locked by another tab. Close other OctoFlow tabs and retry.'));
+  });
+}
+
+function octoTxDone(tx) {
+  return new Promise((res, rej) => {
+    tx.oncomplete = res;
+    tx.onerror    = () => rej(tx.error);
+    tx.onabort    = () => rej(tx.error);
+  });
+}
+
+function octoReadState(db) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(OCTO_STATE, 'readonly');
+    const rq = tx.objectStore(OCTO_STATE).get('state');
+    rq.onsuccess = () => res(rq.result || { id: 'state', tokens: [], location: null, clipboard: null });
+    rq.onerror   = () => rej(rq.error);
+  });
+}
+
+/* UTF-8-safe text → base64 */
+function octoTextToBase64(str) {
+  const bytes = enc.encode(str);
+  let bin = '';
+  const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  }
+  return btoa(bin);
+}
+
+/* Mini IDE file record → base64 payload */
+function octoFileToBase64(f) {
+  if (f.bin) {
+    const i = f.content.indexOf(',');
+    return i >= 0 ? f.content.slice(i + 1) : '';
+  }
+  return octoTextToBase64(f.content);
+}
+
+async function octoWriteSnapshot(meta, files) {
+  const db = await openOctoDB();
+  const snapshotKey = 'snap-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+
+  /* 1) Bulk file data → staging store */
+  const tx1 = db.transaction(OCTO_STAGING, 'readwrite');
+  tx1.objectStore(OCTO_STAGING).put({
+    id: snapshotKey,
+    createdAt: Date.now(),
+    meta: {
+      name: meta.name,
+      description: meta.description || '',
+      private: !!meta.private,
+      default_branch: meta.default_branch || 'main'
+    },
+    files
+  });
+  await octoTxDone(tx1);
+
+  /* 2) Sticky note → appState, preserving whatever is already there */
+  const existing = await octoReadState(db);
+  existing.clipboard = {
+    action: 'copy',
+    type: 'repo',
+    path: meta.name,
+    sourceOwner: '__local__',   // sentinel — never a real GitHub username
+    sourceRepo: meta.name,
+    sha: null,
+    snapshotKey
+  };
+  const tx2 = db.transaction(OCTO_STATE, 'readwrite');
+  tx2.objectStore(OCTO_STATE).put(existing);
+  await octoTxDone(tx2);
+
+  try { db.close(); } catch (e) {}
+  return snapshotKey;
+}
+
+/* ═══════════ EXPORT DIALOG ═══════════ */
+function octoExportDialog(defaultName) {
+  return new Promise(resolve => {
+    const { box, close } = modal(
+      '<h3>Export to OctoFlow</h3>' +
+      '<p class="hint">Stages this project into OctoFlow\'s IndexedDB so you can paste it there as a new GitHub repository. The snapshot survives reloads and is only cleared when the paste succeeds, when you cancel it manually, or when browser data is cleared.</p>' +
+      '<label class="fld"><span>Repository name</span>' +
+        '<input id="oxName" spellcheck="false" autocomplete="off" placeholder="my-project"></label>' +
+      '<label class="fld"><span>Description (optional)</span>' +
+        '<input id="oxDesc" spellcheck="false" autocomplete="off" placeholder="Short description"></label>' +
+      '<label class="fld"><span>Default branch</span>' +
+        '<input id="oxBranch" value="main" spellcheck="false" autocomplete="off"></label>' +
+      '<div class="fld"><span>Visibility</span>' +
+        '<div class="seg" id="oxVis">' +
+          '<button type="button" data-v="public" class="active">Public</button>' +
+          '<button type="button" data-v="private">Private</button>' +
+        '</div></div>' +
+      '<div class="actions">' +
+        '<button class="btn ghost" data-act="c">Cancel</button>' +
+        '<button class="btn primary" data-act="o">Export</button>' +
+      '</div>');
+
+    let visibility = 'public';
+    box.querySelector('#oxVis').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      Array.from(b.parentNode.children).forEach(c => c.classList.remove('active'));
+      b.classList.add('active');
+      visibility = b.dataset.v;
+    };
+
+    const nameInp = box.querySelector('#oxName');
+    nameInp.value = defaultName || 'mini-ide-project';
+    setTimeout(() => { nameInp.focus(); nameInp.select(); }, 60);
+
+    const finish = v => { close(); resolve(v); };
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.act === 'c') return finish(null);
+      const name = nameInp.value.trim().replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+      if (!name) { nameInp.focus(); return; }
+      finish({
+        name,
+        description: box.querySelector('#oxDesc').value.trim(),
+        default_branch: box.querySelector('#oxBranch').value.trim() || 'main',
+        private: visibility === 'private'
+      });
+    };
+  });
+}
+
+async function exportToOctoFlow() {
+  const paths = Object.keys(state.files);
+  if (!paths.length) {
+    toast('Nothing to export — add some files first');
+    return;
+  }
+
+  const base = state.files['index.html']
+    ? 'mini-ide-project'
+    : (nameOf(paths[0]).replace(/\.[^.]+$/, '') || 'mini-ide-project');
+
+  const meta = await octoExportDialog(base);
+  if (!meta) return;
+
+  try {
+    const files = paths.sort(sortPaths).map(p => ({
+      path: p,
+      base64: octoFileToBase64(state.files[p])
+    }));
+
+    await octoWriteSnapshot(meta, files);
+
+    const n = files.length;
+    toast('Staged "' + meta.name + '" (' + n + ' file' + (n === 1 ? '' : 's') +
+          ') — open OctoFlow and press Paste Repo', 4200);
+  } catch (e) {
+    toast('Export failed: ' + (e.message || e));
+  }
+}
+
+/* ═══════════ FILE MANAGER (List expand) ═══════════ */
+function buildTree() {
+  const root = { name: '', path: '', folders: [], files: [] };
+  const map = { '': root };
+
+  for (const d of Array.from(state.folders).sort(sortPaths)) {
+    const node = { name: nameOf(d), path: d, folders: [], files: [] };
+    map[d] = node;
+    const par = map[parentOf(d)] || root;
+    par.folders.push(node);
+  }
+  for (const f of Object.keys(state.files).sort(sortPaths)) {
+    const par = map[parentOf(f)] || root;
+    par.files.push({ name: nameOf(f), path: f });
+  }
+  return root;
+}
+
+function openManager() {
+  const sel = new Set();
+  const collapsed = new Set();
+  const { box, close } = modal(
+    '<div class="mhead">' +
+      '<strong>Project files</strong>' +
+      '<div style="display:flex;gap:6px">' +
+        '<button class="icon-btn sm" id="mAdd" title="Add">＋</button>' +
+        '<button class="icon-btn sm" id="mClose" title="Close">✕</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="mtree" id="mTree"></div>' +
+    '<div class="mfoot">' +
+      '<button class="btn" id="mDl">⬇ Download</button>' +
+      '<button class="btn" id="mZip">🗜 ZIP</button>' +
+      '<button class="btn" id="mEnc">🔒 Protected</button>' +
+      '<button class="btn" id="mRen">✎ Rename</button>' +
+      '<button class="btn danger" id="mDel">🗑 Delete</button>' +
+    '</div>', 'wide');
+
+  const treeEl = box.querySelector('#mTree');
+
+  function render() {
+    treeEl.innerHTML = '';
+    const root = buildTree();
+
+    const row = (path, name, kind, depth) => {
+      const el = document.createElement('div');
+      el.className = 'frow' + (sel.has(path) ? ' sel' : '');
+      el.style.paddingLeft = (8 + depth * 15) + 'px';
+      el.dataset.p = path;
+      el.dataset.kind = kind;
+      el.innerHTML =
+        '<input type="checkbox" class="fchk"' + (sel.has(path) ? ' checked' : '') + '>' +
+        (kind === 'folder'
+          ? '<button type="button" class="ftog">' + (collapsed.has(path) ? '▸' : '▾') + '</button>'
+          : '<span class="ftog"></span>') +
+        '<span class="fico">' + (kind === 'folder' ? '📁' : chipIcon(name)) + '</span>' +
+        '<span class="fname">' + esc(name) + '</span>' +
+        '<span class="factions">' +
+          (kind === 'file' ? '<button type="button" class="mini" data-a="dl" title="Download">⬇</button>' : '') +
+          '<button type="button" class="mini" data-a="rn" title="Rename">✎</button>' +
+          '<button type="button" class="mini" data-a="rm" title="Delete">🗑</button>' +
+        '</span>';
+      return el;
+    };
+
+    const walk = (node, depth) => {
+      for (const d of node.folders) {
+        treeEl.appendChild(row(d.path, d.name, 'folder', depth));
+        if (!collapsed.has(d.path)) walk(d, depth + 1);
+      }
+      for (const f of node.files) {
+        treeEl.appendChild(row(f.path, f.name, 'file', depth));
+      }
+    };
+    walk(root, 0);
+
+    if (!treeEl.children.length) {
+      treeEl.innerHTML = '<div class="mempty">No files yet — press ＋ to create one</div>';
+    }
+  }
+
+  function selectedPaths() {
+    return Array.from(sel);
+  }
+
+  treeEl.addEventListener('click', async e => {
+    const rowEl = e.target.closest('.frow');
+    if (!rowEl) return;
+    const path = rowEl.dataset.p;
+    const kind = rowEl.dataset.kind;
+
+    if (e.target.classList.contains('fchk')) {
+      if (e.target.checked) sel.add(path); else sel.delete(path);
+      rowEl.classList.toggle('sel', e.target.checked);
+      return;
+    }
+    if (e.target.classList.contains('ftog') && kind === 'folder') {
+      if (collapsed.has(path)) collapsed.delete(path); else collapsed.add(path);
+      render();
+      return;
+    }
+    const act = e.target.closest('.mini');
+    if (act) {
+      e.stopPropagation();
+      const a = act.dataset.a;
+      if (a === 'dl') { await downloadSingle(path); }
+      if (a === 'rm') {
+        const ok = await confirmDialog('Delete “' + nameOf(path) + '” and everything inside it?', 'Delete', 'Cancel');
+        if (!ok) return;
+        deletePath(path);
+        sel.delete(path);
+        renderAll(); persist(); commitHistory();
+        render();
+        toast('Deleted ' + nameOf(path));
+      }
+      if (a === 'rn') {
+        const nn = await promptRename(path);
+        if (!nn) return;
+        try {
+          renamePath(path, nn);
+          renderAll(); persist(); commitHistory();
+          render();
+          toast('Renamed to ' + nn);
+        } catch (err) { toast(err.message); }
+      }
+      return;
+    }
+
+    if (kind === 'file') { openFile(path); close(); }
+    else { if (collapsed.has(path)) collapsed.delete(path); else collapsed.add(path); render(); }
+  });
+
+  box.querySelector('#mClose').onclick = close;
+  box.querySelector('#mAdd').onclick = ev => {
+    showMenu(ev.currentTarget, [
+      { label: '⬆  Upload from device…', onClick: () => pickFiles('') },
+      { label: '📄  Create file…', onClick: async () => {
+          const r = await createDialog('');
+          if (!r) return;
+          applyCreate(r); render();
+      } },
+      { label: '📁  Create folder…', onClick: async () => {
+          const r = await createDialog('');
+          if (!r) return;
+          r.type = 'folder';
+          applyCreate(r); render();
+      } }
+    ]);
+  };
+
+  box.querySelector('#mDl').onclick = async () => {
+    const s = selectedPaths();
+    if (s.length === 1 && state.files[s[0]]) { await downloadSingle(s[0]); return; }
+    await downloadZip(s.length ? s : null, false);
+  };
+  box.querySelector('#mZip').onclick = () => downloadZip(selectedPaths().length ? selectedPaths() : null, false);
+  box.querySelector('#mEnc').onclick = () => downloadZip(selectedPaths().length ? selectedPaths() : null, true);
+
+  box.querySelector('#mRen').onclick = async () => {
+    const s = selectedPaths();
+    if (s.length !== 1) { toast('Select exactly one item to rename'); return; }
+    const nn = await promptRename(s[0]);
+    if (!nn) return;
+    try {
+      renamePath(s[0], nn);
+      sel.clear();
+      renderAll(); persist(); commitHistory();
+      render();
+      toast('Renamed to ' + nn);
+    } catch (err) { toast(err.message); }
+  };
+
+  box.querySelector('#mDel').onclick = async () => {
+    const s = selectedPaths();
+    if (!s.length) { toast('Nothing selected'); return; }
+    const ok = await confirmDialog(
+      'Delete ' + s.length + ' selected item(s) and everything inside them?',
+      'Delete', 'Cancel');
+    if (!ok) return;
+    s.forEach(deletePath);
+    sel.clear();
+    renderAll(); persist(); commitHistory();
+    render();
+    toast('Deleted ' + s.length + ' item(s)');
+  };
+
+  render();
+}
+
+function promptRename(path) {
+  return new Promise(resolve => {
+    const isFolder = state.folders.has(path);
+    const { box, close } = modal(
+      '<h3>Rename ' + (isFolder ? 'folder' : 'file') + '</h3>' +
+      '<label class="fld"><span>New name</span>' +
+        '<input id="rn" value="' + esc(nameOf(path)) + '" spellcheck="false" autocomplete="off"></label>' +
+      '<div class="actions">' +
+        '<button class="btn ghost" data-act="c">Cancel</button>' +
+        '<button class="btn primary" data-act="o">Rename</button>' +
+      '</div>');
+    const inp = box.querySelector('#rn');
+    setTimeout(() => { inp.focus(); inp.select(); }, 60);
+    const done = v => { close(); resolve(v); };
+    box.querySelector('.actions').onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      done(b.dataset.act === 'o' ? inp.value : null);
+    };
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(inp.value); });
+  });
+}
+
+/* ═══════════ CREATE APPLY ═══════════ */
+function applyCreate(r) {
+  if (r.type === 'folder') {
+    state.folders.add(r.path);
+    ensureFolders(r.path);
+  } else {
+    state.files[r.path] = { content: '', bin: false };
+    ensureFolders(r.path);
+    state.active = r.path;
+  }
+  renderAll(); persist(); commitHistory();
+  toast((r.type === 'folder' ? 'Folder ' : 'File ') + nameOf(r.path) + ' created');
+}
+
+/* ═══════════ TOP-LEVEL ACTIONS ═══════════ */
+async function actionNew() {
+  const r = await createDialog('');
+  if (r) applyCreate(r);
+}
+async function actionUpload() {
+  pickFiles('');
+}
+function actionHome() {
+  closeMenus();
+  $$('.modal-backdrop').forEach(m => m.remove());
+  setMode('code');
+  if (state.files['index.html']) openFile('index.html');
+  else renderAll();
+}
+function menuItems() {
+  return [
+    { label: '📄  New file / folder…', onClick: actionNew },
+    { label: '⬆  Upload files…', onClick: actionUpload },
+    { label: '🚀  Export to OctoFlow…', onClick: exportToOctoFlow },
+    { label: '🗜  Download project (.zip)', onClick: () => downloadZip(null, false) },
+    { label: '🔒  Download password-protected (.zip)…', onClick: () => downloadZip(null, true) },
+    { label: '📦  Import .zip / encrypted archive…', onClick: () => pickImport() },
+    { label: '🗑  Clear project', danger: true, onClick: async () => {
+        if (!Object.keys(state.files).length && !state.folders.size) {
+          toast('Project is already empty');
+          return;
+        }
+        const ok = await confirmDialog('Delete every file and folder in this project?', 'Clear', 'Cancel');
+        if (!ok) return;
+        state.files = {};
+        state.folders = new Set();
+        state.active = null;
+        renderAll(); persist(); commitHistory();
+        toast('Project cleared');
+      } }
+  ];
+}
+
+/* ═══════════ WIRING ═══════════ */
+$('#btnHome').onclick       = actionHome;
+$('#btnUndo').onclick       = undo;
+$('#btnRedo').onclick       = redo;
+$('#btnMenu').onclick       = e => showMenu(e.currentTarget, menuItems());
+$('#btnSave').onclick       = saveToFolder;
+$('#btnCode').onclick       = () => setMode('code');
+$('#btnPreview').onclick    = () => setMode('preview');
+$('#btnNew').onclick        = actionNew;
+$('#btnOpenFolder').onclick = openFolder;
+$('#btnExpand').onclick     = openManager;
+$('#btnUpload').onclick     = actionUpload;
+$('#phNew').onclick         = actionNew;
+$('#btnFab').onclick        = e => showMenu(e.currentTarget, [
+  { label: '⬆  Upload from device…', onClick: actionUpload },
+  { label: '📄  Create file / folder…', onClick: actionNew },
+  { label: '🚀  Export to OctoFlow…', onClick: exportToOctoFlow }
+]);
+
+/* editor */
+codeEl.addEventListener('input', () => {
+  const f = state.files[state.active];
+  if (!f || f.bin) return;
+  f.content = codeEl.value;
+  scheduleSave();
+  commitHistory();
+});
+codeEl.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    setMode('preview');
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    saveToFolder();
+    return;
+  }
+  if (e.key === 'Tab' && !e.shiftKey) {
+    e.preventDefault();
+    const s = codeEl.selectionStart, en = codeEl.selectionEnd;
+    codeEl.value = codeEl.value.substring(0, s) + '  ' + codeEl.value.substring(en);
+    codeEl.selectionStart = codeEl.selectionEnd = s + 2;
+    const f = state.files[state.active];
+    if (f) { f.content = codeEl.value; scheduleSave(); commitHistory(); }
+  }
+});
+
+/* global shortcuts */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeMenus(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    openManager();
+  }
+});
+
+window.addEventListener('beforeunload', persist);
+
+/* ═══════════ BOOT ═══════════ */
+(function boot() {
+  restore();          // restores your last session, or starts empty
+  renderAll();
+  seedHistory();
+  setMode('code');
+})();
+</script>
+</body>
+</html>
