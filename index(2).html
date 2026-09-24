@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTML Runner</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #f5f5f5;
+    color: #222;
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Top toggle bar ───────────────────────── */
+  .topbar {
+    display: flex;
+    justify-content: center;
+    padding: 18px 12px;
+    background: #f5f5f5;
+  }
+
+  .toggle {
+    display: inline-flex;
+    background: #d6e4f5;
+    border: 2px solid #5b9bd5;
+    border-radius: 999px;
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .toggle button {
+    border: none;
+    background: transparent;
+    padding: 8px 28px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: #1a1a1a;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    text-transform: uppercase;
+  }
+
+  .toggle button.active {
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+
+  /* ── Main split area ──────────────────────── */
+  .split {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 10px;
+    padding: 0 24px 24px 24px;
+    min-height: 0;
+  }
+
+  .pane {
+    background: #90c4f0;
+    border: 1px solid #3a3a3a;
+    border-radius: 2px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .pane .label {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 12px;
+    text-align: center;
+  }
+
+  /* Left placeholder strip */
+  .pane.left {
+    justify-content: center;
+    align-items: center;
+  }
+  .pane.left .placeholder {
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    padding: 10px;
+    line-height: 1.4;
+  }
+
+  /* Right pane holds textarea OR iframe */
+  .pane.right {
+    padding: 0;
+  }
+  .pane.right .placeholder {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  textarea#code {
+    flex: 1;
+    width: 100%;
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 14px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    background: #ffffff;
+    color: #1a1a1a;
+    tab-size: 2;
+    display: none;
+  }
+  textarea#code::placeholder { color: #999; }
+
+  iframe#preview {
+    flex: 1;
+    width: 100%;
+    border: none;
+    background: #ffffff;
+    display: none;
+  }
+
+  /* Show/hide based on mode */
+  body.mode-code textarea#code { display: block; }
+  body.mode-code .right .placeholder { display: none; }
+
+  body.mode-preview iframe#preview { display: block; }
+  body.mode-preview .right .placeholder { display: none; }
+
+  /* Mobile: stack */
+  @media (max-width: 640px) {
+    .split {
+      grid-template-columns: 60px 1fr;
+      padding: 0 12px 12px 12px;
+    }
+  }
+</style>
+</head>
+<body class="mode-code">
+
+  <!-- Top toggle -->
+  <div class="topbar">
+    <div class="toggle">
+      <button id="btnCode" class="active" onclick="setMode('code')">Code</button>
+      <button id="btnPreview" onclick="setMode('preview')">Preview</button>
+    </div>
+  </div>
+
+  <!-- Split layout -->
+  <div class="split">
+
+    <!-- Left placeholder pane -->
+    <div class="pane left">
+      <div class="placeholder">Place<br>holder for<br>now, I will<br>describe it<br>later</div>
+    </div>
+
+    <!-- Right pane: code OR preview -->
+    <div class="pane right">
+      <textarea id="code" spellcheck="false" placeholder="Write your HTML here..."></textarea>
+
+      <iframe id="preview" sandbox="allow-scripts allow-modals allow-forms allow-popups"></iframe>
+
+      <div class="placeholder" id="rightPlaceholder">The code or the preview</div>
+    </div>
+
+  </div>
+
+<script>
+  const codeEl      = document.getElementById('code');
+  const preview     = document.getElementById('preview');
+  const btnCode     = document.getElementById('btnCode');
+  const btnPreview  = document.getElementById('btnPreview');
+  const placeholder = document.getElementById('rightPlaceholder');
+
+  function setMode(mode) {
+    document.body.classList.toggle('mode-code',    mode === 'code');
+    document.body.classList.toggle('mode-preview', mode === 'preview');
+    btnCode.classList.toggle('active',    mode === 'code');
+    btnPreview.classList.toggle('active', mode === 'preview');
+
+    // When switching to preview, render current code
+    if (mode === 'preview') {
+      preview.srcdoc = codeEl.value;
+    }
+  }
+
+  // Hide initial placeholder once we have content
+  placeholder.style.display = 'none';
+
+  // Ctrl/Cmd + Enter runs the preview
+  codeEl.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      setMode('preview');
+    }
+    // Tab inserts 2 spaces
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = codeEl.selectionStart, en = codeEl.selectionEnd;
+      codeEl.value = codeEl.value.substring(0, s) + '  ' + codeEl.value.substring(en);
+      codeEl.selectionStart = codeEl.selectionEnd = s + 2;
+    }
+  });
+</script>
+
+</body>
+</html>
